@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Build output
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.*.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri
+tauri.conf.json
+
+# PyInstaller
+*.spec
+*.manifest
+*.pdb
+*.dll
+*.exe
+*.pyd
+
+# SQLite
+*.db
+*.sqlite
+*.sqlite-journal
+
+# Editor
+*.tmp
+*.bak

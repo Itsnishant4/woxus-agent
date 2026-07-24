@@ -1,0 +1,37 @@
+/**
+ * PCMProcessor — AudioWorklet for capturing microphone audio.
+ *
+ * Collects Float32 PCM samples in a buffer and posts completed
+ * buffers to the main thread for downsampling + sending to Gemini.
+ *
+ * Mirrors the working reference from gemini-live-api-examples.
+ */
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 4096;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bufferIndex = 0;
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    if (!input || !input.length) return true;
+
+    const channelData = input[0];
+
+    for (let i = 0; i < channelData.length; i++) {
+      this.buffer[this.bufferIndex++] = channelData[i];
+
+      if (this.bufferIndex >= this.bufferSize) {
+        this.port.postMessage(this.buffer);
+        this.buffer = new Float32Array(this.bufferSize);
+        this.bufferIndex = 0;
+      }
+    }
+
+    return true;
+  }
+}
+
+registerProcessor("pcm-processor", PCMProcessor);

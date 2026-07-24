@@ -1,0 +1,14 @@
+# Woxus backend requirements
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+google-genai==1.0.0
+pydantic==2.10.0
+pydantic-settings==2.6.0
+sqlalchemy==2.0.36
+httpx==0.28.0
+websockets==14.1
+python-dotenv==1.0.1
+cryptography==44.0.0
+python-multipart==0.0.18
+aiofiles==24.1.0
+numpy==2.0.0

@@ -1,7 +1,6 @@
 """Voice route — WebSocket relay between frontend and Gemini Live API.
 
-Mirrors the working reference main.py WebSocket endpoint.
-Frontend sends 16-bit PCM audio + JSON text; receives audio + JSON events.
+Frontend sends 16-bit PCM audio + JSON text; receives 24kHz PCM audio + JSON events.
 """
 
 import asyncio
@@ -11,7 +10,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from services.gemini_live import GeminiLiveService
+from ..services.gemini_live import GeminiLiveService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -19,18 +18,7 @@ logger = logging.getLogger(__name__)
 
 @router.websocket("/live")
 async def gemini_live_websocket(websocket: WebSocket):
-    """WebSocket endpoint for Gemini Live voice streaming.
-
-    Protocol:
-      Client → Server: Binary (16kHz Int16 PCM audio)
-                        JSON {"text": "..."} for text input
-                        JSON {"type": "image", "data": "...", "mime_type": "..."}
-      Server → Client: Binary (24kHz Int16 PCM audio from Gemini)
-                       JSON {"type": "user", "text": "..."} (user transcription)
-                       JSON {"type": "gemini", "text": "..."} (gemini transcription)
-                       JSON {"type": "interrupted"}
-                       JSON {"type": "error", "message": "..."}
-    """
+    """WebSocket endpoint for Gemini Live voice streaming."""
     await websocket.accept()
     logger.info("Voice WebSocket connected")
 
@@ -46,7 +34,7 @@ async def gemini_live_websocket(websocket: WebSocket):
             logger.debug("Failed to send audio to frontend")
 
     async def audio_interrupt_callback():
-        """Notify frontend that Gemini was interrupted by user speech."""
+        """Notify frontend that Gemini was interrupted."""
         try:
             await websocket.send_json({"type": "interrupted"})
         except Exception:
@@ -64,10 +52,7 @@ async def gemini_live_websocket(websocket: WebSocket):
     gemini_model = config.get("GEMINI_MODEL", "gemini-2.0-flash-live-preview")
 
     if not gemini_api_key:
-        await websocket.send_json({
-            "type": "error",
-            "message": "GEMINI_API_KEY not configured"
-        })
+        await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY not configured"})
         await websocket.close()
         return
 
@@ -84,25 +69,19 @@ async def gemini_live_websocket(websocket: WebSocket):
                 message = await websocket.receive()
 
                 if message.get("bytes"):
-                    # Binary PCM audio → Gemini audio input
                     await audio_input_queue.put(message["bytes"])
                 elif message.get("text"):
                     text = message["text"]
                     try:
                         payload = json.loads(text)
-                        # Image frame for camera/screen sharing
                         if isinstance(payload, dict) and payload.get("type") == "image":
-                            logger.info(
-                                "Received image chunk: %d base64 chars",
-                                len(str(payload["data"])),
-                            )
+                            logger.info("Received image: %d bytes", len(payload["data"]))
                             image_data = base64.b64decode(payload["data"])
                             await video_input_queue.put(image_data)
                             continue
                     except json.JSONDecodeError:
                         pass
 
-                    # Plain text or text-typed JSON
                     await text_input_queue.put(text)
 
         except WebSocketDisconnect:
@@ -110,7 +89,7 @@ async def gemini_live_websocket(websocket: WebSocket):
         except Exception as e:
             logger.error("Error receiving from client: %s", e)
 
-    # Run receive + Gemini session concurrently
+    # Run receive loop and Gemini session concurrently
     try:
         await asyncio.gather(
             receive_from_client(),

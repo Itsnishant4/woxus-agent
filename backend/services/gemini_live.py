@@ -1,18 +1,20 @@
 """Woxus — Gemini Live API service.
 
-Mirrors the working reference implementation from
-gemini-live-api-examples/gemini-live-genai-python-sdk/gemini_live.py
+The google-genai SDK's send() method uses deprecated 'media_chunks' format
+that the API rejects with 1007. This implementation sends the correct
+wire format directly via the WebSocket, bypassing the SDK's send method.
 
-Handles bidirectional WebSocket streaming with Gemini Live:
-- Sends microphone audio (16kHz PCM) and text input
-- Receives AI audio (24kHz PCM) and transcription events
-- Supports interruption / barge-in
-- Optional tool calls for desktop automation
+Wire format (non-deprecated):
+- Audio: {"realtime_input": {"audio": {"data": "<base64>", "mimeType": "audio/pcm;rate=16000"}}}
+- Text:  {"client_content": {"turns": [...], "turn_complete": true}}
 """
 
 import asyncio
+import base64
+import json
 import logging
 import traceback
+from collections.abc import Awaitable
 from typing import Any, Callable, Optional
 
 from google import genai
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeminiLiveService:
-    """Wraps the genai.Client Live API session for real‑time audio + text."""
+    """Gemini Live API session using direct WebSocket messages."""
 
     def __init__(
         self,
@@ -45,20 +47,11 @@ class GeminiLiveService:
         audio_input_queue: asyncio.Queue[bytes],
         video_input_queue: asyncio.Queue[bytes],
         text_input_queue: asyncio.Queue[str],
-        audio_output_callback: Callable[[bytes], Any],
-        audio_interrupt_callback: Optional[Callable[[], Any]] = None,
-        transcription_callback: Optional[Callable[[str, str], Any]] = None,
+        audio_output_callback: Callable[[bytes], Awaitable[Any]],
+        audio_interrupt_callback: Optional[Callable[[], Awaitable[Any]]] = None,
+        transcription_callback: Optional[Callable[[str, str], Awaitable[Any]]] = None,
     ):
-        """Open a Gemini Live session and run send/receive loops.
-
-        Args:
-            audio_input_queue: 16kHz Int16 PCM audio chunks from mic
-            video_input_queue: JPEG image frames for camera/screen sharing
-            text_input_queue: Text messages to send as conversation turns
-            audio_output_callback: Called with 24kHz Int16 PCM audio for playback
-            audio_interrupt_callback: Called when Gemini detects user interruption
-            transcription_callback: Called with (role, text) for UI display
-        """
+        """Open a Gemini Live session and run send/receive loops."""
         config = types.LiveConnectConfig(
             response_modalities=[types.Modality.AUDIO],
             speech_config=types.SpeechConfig(
@@ -69,16 +62,13 @@ class GeminiLiveService:
                 )
             ),
             system_instruction=types.Content(parts=[
-                types.Part(text="You are Woxus, a helpful male AI companion. "
-                                "Keep your responses concise and natural. "
-                                "You help with everyday tasks, answer questions, "
-                                "and have natural conversations.")
+                types.Part(text=(
+                    "You are Woxus, a helpful male AI companion. "
+                    "Keep your responses concise and natural. "
+                    "You help with everyday tasks, answer questions, "
+                    "and have natural conversations."
+                ))
             ]),
-            input_audio_transcription=types.AudioTranscriptionConfig(),
-            output_audio_transcription=types.AudioTranscriptionConfig(),
-            realtime_input_config=types.RealtimeInputConfig(
-                turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
-            ),
             tools=self.tools,
         )
 
@@ -90,151 +80,122 @@ class GeminiLiveService:
                 logger.info("Gemini Live session opened")
                 self._running = True
 
-                async def send_audio():
-                    """Send microphone audio chunks to Gemini."""
-                    try:
-                        while True:
-                            chunk = await audio_input_queue.get()
-                            await session.send_realtime_input(
-                                audio=types.Blob(
-                                    data=chunk,
-                                    mime_type=f"audio/pcm;rate={self.input_sample_rate}",
-                                )
-                            )
-                    except asyncio.CancelledError:
-                        logger.debug("send_audio task cancelled")
-                    except Exception as e:
-                        logger.error(
-                            "send_audio error: %s\n%s", e, traceback.format_exc()
-                        )
+                # Trigger AI to speak first when session opens
+                text_input_queue.put_nowait("Hello")
 
-                async def send_video():
-                    """Send camera/screen images to Gemini (if enabled)."""
+                # Reference the internal WebSocket directly
+                ws = session._ws
+                mime_type = f"audio/pcm;rate={self.input_sample_rate}"
+
+                async def send_audio():
+                    """Send audio using correct wire format, bypassing SDK send()."""
                     try:
-                        while True:
-                            chunk = await video_input_queue.get()
-                            logger.info(
-                                "Sending video frame: %d bytes", len(chunk)
-                            )
-                            await session.send_realtime_input(
-                                video=types.Blob(data=chunk, mime_type="image/jpeg")
-                            )
+                        while self._running:
+                            chunk = await audio_input_queue.get()
+                            # Build the message in the NEW format (not media_chunks)
+                            b64_data = base64.b64encode(chunk).decode("utf-8")
+                            msg = json.dumps({
+                                "realtime_input": {
+                                    "audio": {
+                                        "data": b64_data,
+                                        "mimeType": mime_type,
+                                    }
+                                }
+                            })
+                            await ws.send(msg)
                     except asyncio.CancelledError:
-                        logger.debug("send_video task cancelled")
+                        logger.debug("send_audio cancelled")
                     except Exception as e:
-                        logger.error(
-                            "send_video error: %s\n%s", e, traceback.format_exc()
-                        )
+                        if self._running:
+                            logger.error("send_audio error: %s", e)
 
                 async def send_text():
-                    """Send text messages as conversation turns.
-
-                    When text is sent, Gemini treats it as a user turn
-                    (not realtime audio input) and generates a response.
-                    """
+                    """Send text as client_content."""
                     try:
-                        while True:
+                        while self._running:
                             text = await text_input_queue.get()
                             logger.info("Sending text: %s", text[:80])
-                            await session.send(
-                                input=types.BidiGenerateContentClientContent(
-                                    turns=[
-                                        types.Content(
-                                            role="user",
-                                            parts=[types.Part(text=text)],
-                                        )
+                            msg = json.dumps({
+                                "client_content": {
+                                    "turns": [
+                                        {"role": "user", "parts": [{"text": text}]}
                                     ],
-                                )
-                            )
+                                    "turn_complete": True,
+                                }
+                            })
+                            await ws.send(msg)
                     except asyncio.CancelledError:
-                        logger.debug("send_text task cancelled")
+                        logger.debug("send_text cancelled")
                     except Exception as e:
-                        logger.error(
-                            "send_text error: %s\n%s", e, traceback.format_exc()
-                        )
+                        if self._running:
+                            logger.error("send_text error: %s", e)
 
                 async def receive():
-                    """Receive audio, transcriptions, and events from Gemini."""
+                    """Receive and process server messages."""
                     try:
-                        async for response in session.receive():
-                            if not self._running:
-                                break
-
-                            # Handle server content (audio + turn info)
-                            if response.server_content:
-                                model_turn = response.server_content.model_turn
-                                if model_turn:
-                                    for part in model_turn.parts or []:
-                                        # Audio output (24kHz PCM)
-                                        if (
-                                            hasattr(part, "inline_data")
-                                            and part.inline_data
-                                        ):
-                                            audio_output_callback(
-                                                part.inline_data.data
-                                            )
-
-                                        # Text content (from output transcription)
-                                        if hasattr(part, "text") and part.text:
-                                            if transcription_callback:
-                                                transcription_callback(
-                                                    "gemini", part.text
-                                                )
-
-                                # User interruption detected
-                                if response.server_content.interrupted:
-                                    logger.info(
-                                        "Gemini interrupted by user"
-                                    )
-                                    if audio_interrupt_callback:
-                                        audio_interrupt_callback()
-
-                                # User transcript from input audio
-                                if (
-                                    response.server_content.turn_complete
-                                    and transcription_callback
-                                ):
-                                    # Grab accumulated user transcription
-                                    # This is sent as a separate event
-                                    pass
-
-                            # Handle tool calls (Phase 4: desktop control)
-                            if response.tool_call:
-                                for fc in response.tool_call.function_calls or []:
-                                    logger.info(
-                                        "Tool call: %s(args=%s)",
-                                        fc.name,
-                                        fc.args,
-                                    )
-                                    # Phase 4: route to tool_mapping
-
+                        while self._running:
+                            # websockets ClientConnection uses recv(), not receive()
+                            raw = await ws.recv()
+                            data = json.loads(raw)
+                            await self._handle_message(
+                                data, audio_output_callback,
+                                audio_interrupt_callback, transcription_callback,
+                            )
                     except asyncio.CancelledError:
-                        logger.debug("receive task cancelled")
+                        logger.debug("receive cancelled")
                     except Exception as e:
-                        logger.error(
-                            "receive error: %s\n%s",
-                            e,
-                            traceback.format_exc(),
-                        )
+                        if self._running:
+                            logger.error("receive error: %s", e)
 
-                # Run all tasks concurrently
                 await asyncio.gather(
                     send_audio(),
-                    send_video(),
                     send_text(),
                     receive(),
                 )
 
         except Exception as e:
-            logger.error(
-                "Gemini Live session error: %s\n%s", e, traceback.format_exc()
-            )
+            logger.error("Gemini Live session error: %s\n%s", e, traceback.format_exc())
         finally:
             self._running = False
             logger.info("Gemini Live session closed")
 
+    async def _handle_message(
+        self, data: dict,
+        audio_output_callback: Callable[[bytes], Awaitable[Any]],
+        audio_interrupt_callback: Optional[Callable[[], Awaitable[Any]]],
+        transcription_callback: Optional[Callable[[str, str], Awaitable[Any]]],
+    ):
+        """Process a single server message."""
+        sc = data.get("serverContent")
+        if not sc:
+            return
+
+        model_turn = sc.get("modelTurn")
+        if model_turn:
+            for part in model_turn.get("parts", []):
+                inline = part.get("inlineData")
+                if inline:
+                    audio_bytes = base64.b64decode(inline["data"])
+                    await audio_output_callback(audio_bytes)
+
+                text = part.get("text")
+                if text and transcription_callback:
+                    await transcription_callback("gemini", text)
+
+        inp = sc.get("inputTranscription")
+        if inp and inp.get("text") and transcription_callback:
+            await transcription_callback("user", inp["text"])
+
+        out = sc.get("outputTranscription")
+        if out and out.get("text") and transcription_callback:
+            await transcription_callback("gemini", out["text"])
+
+        if sc.get("interrupted"):
+            logger.info("Gemini interrupted by user")
+            if audio_interrupt_callback:
+                await audio_interrupt_callback()
+
     def stop(self):
-        """Signal the session loops to exit."""
         self._running = False
 
     @property

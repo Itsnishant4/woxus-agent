@@ -8,8 +8,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import chat, memory, settings, system, voice
-from config import load_config
+from .routes import chat, memory, settings, system, voice
+from .config import load_config
 
 
 @asynccontextmanager

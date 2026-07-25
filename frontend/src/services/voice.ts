@@ -138,8 +138,9 @@ function handleJsonMessage(
       break;
 
     case 'gemini':
-      // Gemini speech transcription
-      store.addTranscript('gemini', msg.text);
+      // Gemini sends incremental transcription updates.
+      // Replace last gemini entry instead of stacking words.
+      store.addTranscript('gemini', msg.text, true);
       onTranscription?.('gemini', msg.text);
       break;
 

@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
-  MessageSquare, Settings, Brain, FileText, Key,
+  Settings, Brain, FileText, Key,
   Mic, PanelLeft, Zap, ListChecks,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
 import HomePage from '@pages/HomePage';
-import ChatPage from '@pages/ChatPage';
 import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
 import TasksPage from '@pages/TasksPage';
 
 const navItems = [
   { to: '/', icon: Zap, label: 'Home' },
-  { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/tasks', icon: ListChecks, label: 'Tasks' },
   { to: '/notes', icon: FileText, label: 'Notes' },
   { to: '/memory', icon: Brain, label: 'Memory' },
@@ -214,7 +212,6 @@ export default function App() {
         <div className="flex-1 overflow-hidden">
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/chat" element={<ChatPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/tasks" element={<TasksPage />} />

@@ -238,11 +238,6 @@ class GeminiLiveService:
 
         if out_text and transcription_callback:
             await transcription_callback("gemini", out_text)
-        elif texts and transcription_callback:
-            combined = " ".join(texts)
-            display = combined.replace("**", "").strip()
-            if display:
-                await transcription_callback("gemini", display[:200])
 
         inp = sc.get("inputTranscription")
         if inp and inp.get("text") and transcription_callback:

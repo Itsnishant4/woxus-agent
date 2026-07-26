@@ -1,41 +1,43 @@
-"""Memory route — CRUD and search over stored memories."""
+from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+
+from ..models.schemas import MemoryCreate, MemoryUpdate, MemoryOut
+from ..services import memory_engine
 
 router = APIRouter()
 
 
 @router.get("/")
-async def list_memories():
-    """List all memories."""
-    return {"message": "Endpoint not yet implemented (Phase 3)."}
+async def list_memories(category: Optional[str] = None):
+    mems = memory_engine.list_memories(category)
+    return [MemoryOut(**m) for m in mems]
 
 
 @router.get("/search")
 async def search_memories(q: str):
-    """Semantic search over memories."""
-    return {"message": "Endpoint not yet implemented (Phase 3)."}
+    results = memory_engine.search_memories(q)
+    return results
+
+
+@router.post("/")
+async def create_memory(req: MemoryCreate):
+    mem = memory_engine.create_memory(req.category, req.content, req.importance)
+    return MemoryOut(**mem)
 
 
 @router.put("/{memory_id}")
-async def update_memory(memory_id: str):
-    """Update a specific memory."""
-    return {"message": "Endpoint not yet implemented (Phase 3)."}
+async def update_memory(memory_id: str, req: MemoryUpdate):
+    updates = req.model_dump(exclude_none=True)
+    mem = memory_engine.update_memory(memory_id, updates)
+    if mem is None:
+        raise HTTPException(404, "Memory not found")
+    return MemoryOut(**mem)
 
 
 @router.delete("/{memory_id}")
 async def delete_memory(memory_id: str):
-    """Delete a specific memory."""
-    return {"message": "Endpoint not yet implemented (Phase 3)."}
-
-
-@router.post("/export")
-async def export_memories():
-    """Export all memories."""
-    return {"message": "Endpoint not yet implemented (Phase 3)."}
-
-
-@router.post("/import")
-async def import_memories():
-    """Import memories."""
-    return {"message": "Endpoint not yet implemented (Phase 3)."}
+    ok = memory_engine.delete_memory(memory_id)
+    if not ok:
+        raise HTTPException(404, "Memory not found")
+    return {"status": "deleted"}

@@ -11,6 +11,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..services.gemini_live import GeminiLiveService
+from ..services.tool_definitions import agent_tools
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,13 +44,24 @@ async def gemini_live_websocket(websocket: WebSocket):
     async def transcription_callback(role: str, text: str):
         """Send speech transcription to frontend for UI display."""
         try:
+            logger.info("Sending to frontend: type=%s text=%s", role, text[:100])
             await websocket.send_json({"type": role, "text": text})
         except Exception:
             logger.debug("Failed to send transcription")
 
     config = websocket.app.state.config
     gemini_api_key = config.get("GEMINI_API_KEY")
-    gemini_model = config.get("GEMINI_MODEL", "gemini-2.0-flash-live-preview")
+    gemini_model = config.get("GEMINI_MODEL", "")
+    # User-configured model(s) first, then fallback list
+    user_models = [m.strip() for m in gemini_model.split(",") if m.strip()]
+    fallbacks = [
+        "gemini-2.5-flash-native-audio-preview-12-2025",
+        "gemini-2.0-flash-live-preview",
+        "gemini-3.1-flash-live-preview",
+        "gemini-3.0-flash-live-preview",
+    ]
+    gemini_models = user_models + [m for m in fallbacks if m not in user_models]
+    logger.info("Available Gemini models: %s", gemini_models)
 
     if not gemini_api_key:
         await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY not configured"})
@@ -58,8 +70,9 @@ async def gemini_live_websocket(websocket: WebSocket):
 
     gemini_client = GeminiLiveService(
         api_key=gemini_api_key,
-        model=gemini_model,
+        models=gemini_models,
         input_sample_rate=16000,
+        tools=agent_tools,
     )
 
     async def receive_from_client():

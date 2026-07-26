@@ -1,0 +1,56 @@
+[
+  {
+    "id": "8e0f461b27dd4bc8",
+    "category": "personal",
+    "content": "User's name is Nishant",
+    "importance": 1.0,
+    "active": true,
+    "created_at": "2026-07-26T14:51:30.537636",
+    "updated_at": "2026-07-26T14:51:30.537651"
+  },
+  {
+    "id": "e80f91d1508d425e",
+    "category": "preferences",
+    "content": "User prefers to speak in Gujarati",
+    "importance": 1.0,
+    "active": true,
+    "created_at": "2026-07-26T15:10:11.293489",
+    "updated_at": "2026-07-26T15:10:11.293510"
+  },
+  {
+    "id": "0502ee24be854cd3",
+    "category": "preferences",
+    "content": "User prefers to speak in Gujarati",
+    "importance": 1.0,
+    "active": true,
+    "created_at": "2026-07-26T15:16:00.627054",
+    "updated_at": "2026-07-26T15:16:00.627068"
+  },
+  {
+    "id": "05f36d062c2141a0",
+    "category": "projects",
+    "content": "User started a React project named initial-react-app on the Desktop.",
+    "importance": 0.6,
+    "active": true,
+    "created_at": "2026-07-26T15:16:29.304862",
+    "updated_at": "2026-07-26T15:16:29.304873"
+  },
+  {
+    "id": "9c0f01c2b0af4017",
+    "category": "projects",
+    "content": "User started new React project 'my-react-app' on Desktop (task_id: 09378428c9a8)",
+    "importance": 0.6,
+    "active": true,
+    "created_at": "2026-07-26T16:12:17.146130",
+    "updated_at": "2026-07-26T16:12:17.146147"
+  },
+  {
+    "id": "9767b21b081e48fe",
+    "category": "language",
+    "content": "User's language is Hindi",
+    "importance": 0.6,
+    "active": true,
+    "created_at": "2026-07-26T16:54:39.628465",
+    "updated_at": "2026-07-26T16:54:39.628476"
+  }
+]

@@ -1,8 +1,8 @@
 export function useMemory() {
   return {
     memories: [],
-    search: async (q: string) => [],
-    delete: async (id: string) => {},
+    search: async (_q: string) => [],
+    delete: async (_id: string) => {},
     export: async () => {},
   };
 }

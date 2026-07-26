@@ -155,7 +155,7 @@ export class MediaHandler {
         video: true,
       });
       videoElement.srcObject = this.videoStream;
-      this.videoStream.getVideoTracks()[0].onended = () => {
+      this.videoStream!.getVideoTracks()[0].onended = () => {
         this.stopVideo(videoElement);
         onEnded?.();
       };

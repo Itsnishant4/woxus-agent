@@ -1,6 +1,7 @@
-# Woxus — Build Plan
+# Woxus — Build Plan (v2)
 
-A production-quality Windows desktop AI companion application. Single identity: **Woxus** (male AI companion). No M4, no MYRAA — everything is Woxus.
+Cross-platform desktop AI agent (Electron). White theme. Background-running.
+Monetized via license keys with 10-min free trial + admin panel.
 
 ---
 
@@ -8,82 +9,93 @@ A production-quality Windows desktop AI companion application. Single identity: 
 
 ```
 woxus/
-├── frontend/          # React + TypeScript (Tauri webview)
+├── desktop/                 # Electron app (Mac + Windows)
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── Chat/
-│   │   │   ├── Sidebar/
-│   │   │   ├── Settings/
-│   │   │   ├── MemoryPanel/
-│   │   │   ├── EmotionDashboard/
-│   │   │   ├── VoiceOrb/
-│   │   │   └── ApiKeys/
-│   │   ├── pages/
-│   │   │   ├── ChatPage.tsx
-│   │   │   ├── SettingsPage.tsx
-│   │   │   └── MemoryPage.tsx
-│   │   ├── hooks/
-│   │   │   ├── useAgent.ts
-│   │   │   ├── useVoice.ts
-│   │   │   └── useMemory.ts
-│   │   ├── services/
-│   │   │   ├── api.ts
-│   │   │   ├── websocket.ts
-│   │   │   └── voice.ts
-│   │   ├── types/
-│   │   │   └── index.ts
-│   │   └── styles/
-│   │       └── theme.ts
+│   │   ├── main/            # Electron main process
+│   │   │   ├── index.ts     # App entry, tray, background service
+│   │   │   ├── tray.ts      # System tray (minimize-to-tray)
+│   │   │   ├── ipc.ts       # IPC handlers between renderer & main
+│   │   │   └── updater.ts   # Auto-update (electron-updater)
+│   │   ├── renderer/        # React frontend
+│   │   │   ├── components/
+│   │   │   │   ├── ui/              # ShadCN primitives (button, input, dialog, etc.)
+│   │   │   │   ├── Chat/
+│   │   │   │   ├── Sidebar/
+│   │   │   │   ├── NoteWriter/
+│   │   │   │   ├── Terminal/
+│   │   │   │   ├── License/
+│   │   │   │   ├── Feedback/
+│   │   │   │   ├── VoiceCommandBar/ # Voice input + command palette
+│   │   │   │   ├── AgentStatus/     # Tray-connected status indicator
+│   │   │   │   └── Settings/
+│   │   │   ├── pages/
+│   │   │   │   ├── ChatPage.tsx
+│   │   │   │   ├── NotePage.tsx
+│   │   │   │   ├── TerminalPage.tsx
+│   │   │   │   ├── LicensePage.tsx
+│   │   │   │   ├── FeedbackPage.tsx
+│   │   │   │   ├── VoicePage.tsx
+│   │   │   │   └── SettingsPage.tsx
+│   │   │   ├── hooks/
+│   │   │   ├── lib/                 # ShadCN utility (cn(), etc.)
+│   │   │   ├── services/
+│   │   │   ├── store/
+│   │   │   └── styles/
+│   │   │       └── globals.css      # Tailwind v4 + ShadCN theme vars (dark + light)
+│   │   └── assets/
+│   ├── electron-builder.yml
 │   ├── package.json
 │   ├── tsconfig.json
-│   ├── vite.config.ts
-│   └── tailwind.config.ts
-├── backend/           # Python + FastAPI
+│   └── vite.config.ts
+├── backend/                 # Python + FastAPI (local service)
 │   ├── main.py
 │   ├── requirements.txt
 │   ├── config.py
 │   ├── routes/
 │   │   ├── chat.py
-│   │   ├── voice.py          # Gemini Live WebSocket relay
-│   │   ├── memory.py
-│   │   ├── settings.py
-│   │   └── system.py
+│   │   ├── voice.py
+│   │   ├── note.py          # File writing endpoint
+│   │   ├── terminal.py      # Terminal execution endpoint
+│   │   ├── license.py       # License verification endpoint
+│   │   ├── feedback.py
+│   │   ├── system.py
+│   │   └── settings.py
 │   ├── services/
-│   │   ├── gemini_live.py    # Gemini Live API WebSocket handler (STT+TTS+streaming)
-│   │   ├── memory_engine.py
-│   │   └── proactive.py
+│   │   ├── gemini_live.py
+│   │   ├── terminal_exec.py # Secure terminal with retry
+│   │   ├── file_writer.py   # .md, .txt, code file writer
+│   │   ├── license.py       # Local license cache + validation
+│   │   ├── prompt_writer.py # nut.js automation engine
+│   │   └── trial_tracker.py # 10-min trial with device fingerprint
 │   ├── models/
 │   │   └── schemas.py
 │   └── middleware/
-│       └── auth.py
-├── agent/             # Python desktop automation agent
+│       ├── auth.py          # License check middleware
+│       └── trial.py         # Trial session limiter
+├── agent/                   # Python desktop automation
 │   ├── main.py
 │   ├── desktop_controller.py
 │   ├── browser_controller.py
-│   ├── clipboard_manager.py
-│   ├── screenshot_tool.py
+│   ├── nutjs_automation.py  # nut.js prompt writer
 │   ├── keyboard_mouse.py
-│   ├── wake_word.py
-│   ├── activity_monitor.py
 │   └── safety.py
-├── memory/            # Local persistent memory engine
-│   ├── database.py
-│   ├── schema.sql
-│   ├── extractor.py
-│   ├── retriever.py
-│   ├── ranker.py
-│   ├── updater.py
-│   ├── forgetter.py
-│   └── summarizer.py
-├── assets/
-│   ├── icons/
-│   ├── sounds/
-│   └── images/
-├── installer/
-│   ├── build.bat
-│   ├── build.ps1
-│   ├── nsi/
-│   └── config.json
+├── admin/                   # Next.js admin panel (separate)
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── login/
+│   │   │   ├── dashboard/
+│   │   │   ├── users/
+│   │   │   ├── licenses/
+│   │   │   ├── usage/
+│   │   │   ├── feedback/
+│   │   │   └── api/
+│   │   │       ├── verify-key/
+│   │   │       ├── purchase-key/
+│   │   │       ├── register-device/
+│   │   │       └── logs/
+│   │   └── components/
+│   ├── package.json
+│   └── next.config.js
 ├── build/
 ├── logs/
 ├── .env.example
@@ -93,447 +105,259 @@ woxus/
 
 ---
 
-## Phase 1 — Project Scaffolding (Week 1)
+## Core Features (9 Functions)
 
-**Goal:** Clean project structure, initialized repos, basic shell of every module.
+### 1. License Key System
+- App is locked behind a license key
+- No key = no access (redirect to purchase page)
+- Key entered at first launch, cached locally
+- Validated against remote server on startup + periodically
+- Device-bound: one key per machine (hardware ID fingerprint)
+- Purchase flow opens admin panel website
 
-### File Structure
-Create the full directory tree above with placeholder files in every directory.
+### 2. Note & File Writer
+- Write .md, .txt, .json, .js, .py, .html, .css files
+- AI-assisted writing: user describes what they want → AI generates content
+- Save to any location on filesystem (native file picker)
+- Template system for common file types
+- Preview mode for markdown
 
-### Dependencies to Install
+### 3. License Key Server (Admin Panel)
+- REST API for key verification: `POST /api/verify-key`
+- Accepts: license key + hardware ID
+- Returns: valid/invalid + expiry + features
+- Rate-limited, logged
+- Part of Next.js admin panel
 
-| Layer | Packages |
-|-------|----------|
-| Frontend | `react`, `typescript`, `vite`, `tailwindcss`, `@tauri-apps/api`, `zustand`, `react-router-dom`, `framer-motion` |
-| Backend | `fastapi`, `uvicorn`, `google-generativeai`, `pydantic`, `sqlalchemy`, `httpx`, `websockets`, `python-dotenv` |
-| Agent | `pyautogui`, `pynput`, `psutil`, `pywin32`, `comtypes`, `speechrecognition`, `pyttsx3` |
-| Memory | `chromadb` or `sqlite-utils`, `sentence-transformers` (local embeddings) |
+### 4. Prompt Writer Agent
+- Technology: **nut.js** (cross-platform desktop automation)
+- Alternative: **RobotJS** (simpler, less features)
+- Flow:
+  1. User triggers prompt writer via hotkey (e.g., Ctrl+Shift+P)
+  2. Small overlay window appears
+  3. User explains intent in local language (voice or text)
+  4. AI asks clarifying questions
+  5. AI generates detailed, structured prompt
+  6. nut.js types the prompt into the active prompt box (ChatGPT, opencode, Claude, etc.)
+- Works with any desktop app that has a text input field
+- Language detection + prompt translated to English if needed
 
-### Deliverables
-- [ ] All directories created
-- [ ] `package.json` (frontend) with scripts: `dev`, `build`, `tauri`
-- [ ] `requirements.txt` (backend)
-- [ ] `requirements.txt` (agent)
-- [ ] `.env.example` with all API key placeholders
-- [ ] `.gitignore` (exclude `node_modules`, `__pycache__`, `.env`, `logs/`, `build/`)
-- [ ] `README.md` with project overview
-- [ ] Git repo initialized
+### 5. 10-Minute Free Trial
+- First-time users get 10 minutes of full access
+- Device fingerprinting collects:
+  - Hardware ID (MAC + motherboard + disk serial hash)
+  - IP address
+  - OS version
+  - App installation ID
+- Trial state stored locally + synced to server
+- Timer counts down in UI
+- Blocked from running trial twice (server-side check)
+- Trial timer pauses when app is minimized (optional)
+
+### 6. Feedback After Free Trial
+- When trial expires, user sees:
+  1. "Your 10-minute trial has ended" screen
+  2. Option to purchase license key (redirect to admin panel)
+  3. Option to submit feedback
+- Feedback form: rating (1-5) + optional text
+- Feedback stored in admin panel database
+
+### 7. Admin Panel (Next.js)
+- Password-protected dashboard
+- **Usage Reports**: per-user usage logs, timestamps, features used, terminal commands run, files written
+- **User Management**: list users, block/unblock, view device fingerprints, trial status
+- **License Management**: generate keys, set expiry, revoke keys, view activation count per key
+- **Key Purchase**: Stripe/PayPal integration for buying keys
+- **Key Verification API**: `POST /api/verify-key` endpoint
+- **Feedback Dashboard**: view all submitted feedback
+- **Live Logs**: real-time streaming logs from all connected agents
+
+### 8. Terminal Full Command Access
+- Full shell access (bash/zsh on Mac, PowerShell/cmd on Windows)
+- Agent can execute any system command
+- **Retry mechanism**:
+  - On failure → auto-retry up to 3 times with exponential backoff
+  - Each retry logs the attempt + error
+  - If all retries fail → return error + suggestion
+- Command history stored locally
+- Safety confirmation for destructive commands (rm -rf, format, dd, etc.)
+- Output streaming to UI in real-time
 
 ---
 
-## Phase 2 — Backend Core (Weeks 2–3)
+## Design System — HeroUI v3 + Tailwind v4
 
-**Goal:** Working FastAPI server with all API routes, Gemini integration, and streaming.
+### Stack
+- **Tailwind CSS v4** — utility-first CSS (latest features: container queries, @theme directive)
+- **HeroUI v3** — component library built on Tailwind CSS v4 + React Aria, 75+ accessible components
 
-### Key Files
+### Theme Variables (CSS Custom Properties)
 
-| File | Purpose |
-|------|---------|
-| `backend/main.py` | FastAPI app startup, shutdown, config loading, CORS, middleware |
-| `backend/config.py` | Load from `.env`, validate keys, hot-reload |
-| `backend/services/gemini.py` | Streaming chat, function calling, tool use, memory injection into context |
-| `backend/routes/chat.py` | Send message, stream response, stop generation, regenerate, edit/delete message |
-| `backend/routes/memory.py` | CRUD, search, export/import |
-| `backend/routes/settings.py` | API key management (encrypt at rest using `cryptography`), provider switching |
-| `backend/routes/system.py` | Health check, status, shutdown |
-| `backend/routes/system.py` | Health check, status, shutdown |
-| `backend/models/schemas.py` | Pydantic request/response models |
-| `backend/middleware/auth.py` | API key validation middleware |
+```css
+/* Light mode (default) */
+:root {
+  --background: #FFFFFF;
+  --foreground: #09090B;
+  --card: #FFFFFF;
+  --card-foreground: #09090B;
+  --popover: #FFFFFF;
+  --popover-foreground: #09090B;
+  --primary: #18181B;
+  --primary-foreground: #FAFAFA;
+  --secondary: #F4F4F5;
+  --secondary-foreground: #18181B;
+  --muted: #F4F4F5;
+  --muted-foreground: #71717A;
+  --accent: #F4F4F5;
+  --accent-foreground: #18181B;
+  --destructive: #EF4444;
+  --destructive-foreground: #FAFAFA;
+  --border: #E4E4E7;
+  --input: #E4E4E7;
+  --ring: #18181B;
+  --radius: 0.5rem;
+}
 
-### API Key Management Pattern
-```python
-# config.py — never hardcode, always load from encrypted store
-API_KEYS = {
-    "gemini": load_encrypted("GEMINI_KEY"),
-    "elevenlabs": load_encrypted("ELEVENLABS_KEY"),
-    "cartesia": load_encrypted("CARTESIA_KEY"),
+/* Dark mode */
+.dark {
+  --background: #09090B;
+  --foreground: #FAFAFA;
+  --card: #09090B;
+  --card-foreground: #FAFAFA;
+  --popover: #09090B;
+  --popover-foreground: #FAFAFA;
+  --primary: #FAFAFA;
+  --primary-foreground: #18181B;
+  --secondary: #27272A;
+  --secondary-foreground: #FAFAFA;
+  --muted: #27272A;
+  --muted-foreground: #A1A1AA;
+  --accent: #27272A;
+  --accent-foreground: #FAFAFA;
+  --destructive: #7F1D1D;
+  --destructive-foreground: #FAFAFA;
+  --border: #27272A;
+  --input: #27272A;
+  --ring: #D4D4D8;
 }
 ```
 
-### WebSocket
-Bidirectional communication between frontend and backend for streaming, voice events, status updates.
+### UI Vibe — Desktop Agent
+- Dark mode default (agent-like terminal aesthetic)
+- Light mode available (toggle in settings)
+- Compact layout — no wasted space
+- Monospace font in terminal + code blocks
+- Voice command bar pinned at bottom (always visible)
+- Agent status dot in sidebar (idle/listening/thinking/speaking)
+- Command palette (Cmd+K) for quick actions
 
-### Logging
-Structured JSON logs to `logs/` directory, rotation, levels.
-
-### Deliverables
-- [ ] FastAPI server starts and serves all routes
-- [ ] Gemini streaming chat works end-to-end
-- [ ] WebSocket connection established from frontend
-- [ ] API keys stored encrypted, loaded from `.env`
-- [ ] Health endpoint returns 200
-- [ ] Structured logging to `logs/`
+### HeroUI v3 Components Used
+`Button`, `Tooltip`, `Separator`, `Card`, `Input`, `Avatar`, `Switch`, `Select`, `Dialog`, `Tabs`, `Badge`, `ScrollArea`, `DropdownMenu`, `Sheet` (sidebar)
 
 ---
 
-## Phase 3 — Memory Engine (Weeks 3–4)
+## Phases
 
-**Goal:** Production-grade persistent memory with extraction, retrieval, ranking, and forgetting.
+### Phase 1 — Scaffolding
+- [x] Initialize Electron + React project — `frontend/` with Vite, Electron, HeroUI
+- [x] Python backend skeleton with FastAPI — `backend/` with routes, Gemini Live, config
+- [x] Agent skeleton — `agent/` with automation deps
+- [x] Next.js admin panel skeleton — `admin/` with login, dashboard, licenses, users, verify-key API
+- [x] Directory structure, .gitignore, configs
+- [x] CI/CD setup for Mac + Windows builds — `.github/workflows/` with build-mac, build-windows, backend, release
 
-### Memory Pipeline (before every Gemini request)
-1. Analyze current user message
-2. Search memory DB for relevant entries
-3. Retrieve top-K memories ranked by relevance
-4. Inject into Gemini context as system message
-5. Generate response
-6. Extract new memories from response
-7. Update memory DB (save/update/ignore/forget)
+### Phase 2 — Backend Core
+- [x] FastAPI routes for all 24 endpoints (chat, memory, settings, system, voice, terminal, notes, license, trial, feedback)
+- [x] Chat route — in-memory conversation storage with conversation management
+- [x] Memory route — CRUD with JSON file persistence
+- [x] Settings route — API key management with JSON file persistence
+- [x] Gemini Live integration — WebSocket relay (Phase 1, already implemented)
+- [x] License verification middleware — `X-License-Key` + `X-Hardware-Id` header check
+- [x] Trial tracker — hardware-ID-based 10-min trial with JSON persistence
+- [x] Terminal executor — `asyncio.create_subprocess_shell` with 3-retry + dangerous command detection
+- [x] File writer service — allowed extensions validation, directory creation
+- [x] Prompt writer service — skeleton for Phase 5
+- [x] Feedback route — rating + text submission with JSON persistence
 
-### Database Schema (`memory/schema.sql`)
-```sql
-CREATE TABLE memories (
-    id TEXT PRIMARY KEY,
-    category TEXT NOT NULL,        -- identity, preference, goal, project, relationship, emotional, behavioral
-    content TEXT NOT NULL,
-    metadata JSONB,                 -- source_conversation_id, timestamp, confidence, last_accessed
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    importance REAL DEFAULT 0.5,    -- 0.0 to 1.0
-    active BOOLEAN DEFAULT 1
-);
+### Phase 3 — Electron Desktop App
+- Main process: system tray, background service, IPC
+- Renderer: white theme UI, all pages
+- Window management: minimize-to-tray, close-to-tray
+- Auto-launch on startup option
+- electron-updater for auto-updates
 
-CREATE TABLE memory_embeddings (
-    memory_id TEXT PRIMARY KEY REFERENCES memories(id),
-    embedding BLOB NOT NULL
-);
+### Phase 4 — License + Trial System
+- License key client (enter key, cache, verify)
+- 10-minute trial with device fingerprint
+- Timer UI with countdown
+- Trial expiry → purchase/feedback screen
+- Server-side trial block (same device cannot retry)
 
-CREATE TABLE conversations (
-    id TEXT PRIMARY KEY,
-    title TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    pinned BOOLEAN DEFAULT 0
-);
+### Phase 5 — Prompt Writer Agent
+- nut.js integration for cross-platform automation
+- Hotkey detection (global shortcut via Electron)
+- Overlay UI for prompt explanation
+- AI prompt generation + typing into target app
+- Support for: ChatGPT desktop, Claude, opencode, browser chat apps
 
-CREATE TABLE conversation_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conversation_id TEXT REFERENCES conversations(id),
-    role TEXT NOT NULL,             -- user, assistant, system
-    content TEXT NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+### Phase 6 — Terminal + File Writer
+- Terminal page with real-time output streaming
+- Command execution with retry + safety confirmations
+- File writer UI with AI-assisted generation
+- Template system
+- Native file picker integration
 
-### Memory Types
+### Phase 7 — Admin Panel (Next.js)
+- Authentication (password or OAuth)
+- User management CRUD
+- License key generation + management
+- Usage logs + analytics dashboard
+- Feedback viewer
+- Stripe/PayPal checkout integration
+- Key verification API
 
-| Type | What It Stores | Examples |
-|------|---------------|----------|
-| Identity | Who the user is | Name, nickname, birthday, country, language, profession |
-| Preference | What the user likes/dislikes | Favorite color, game, food, music, creators |
-| Goal | What the user wants to achieve | Build a startup, lose weight, grow a YouTube channel |
-| Project | Ongoing projects | Woxus, YouTube channels, websites, businesses |
-| Relationship | People mentioned by user | Friends, family, partners, team members |
-| Emotional | Emotionally important events | Achievements, failures, exciting moments |
-| Behavioral | Learned patterns | Prefers short answers, likes technical explanations, casual language |
-
-### Memory Extraction Logic
-- **Save:** User states facts about themselves
-- **Update:** User corrects or changes a previously stored fact
-- **Ignore:** Greetings, small talk, filler words ("lol", "ok", "thanks")
-- **Forget:** Explicit user requests, outdated info, low-confidence/old entries
-
-### Retrieval
-Sentence-transformer embeddings for semantic search, cosine similarity ranking, hybrid with keyword matching for exact facts.
-
-### Deliverables
-- [ ] SQLite database created with full schema
-- [ ] Memory extractor class (save/update/ignore/forget)
-- [ ] Memory retriever class (semantic search + keyword)
-- [ ] Memory ranker (relevance scoring)
-- [ ] Memory updater (merge changed facts)
-- [ ] Memory forgetter (remove outdated/low-importance)
-- [ ] Memory summarizer (periodic summaries)
-- [ ] Integration into Gemini request pipeline (inject memories before every call)
+### Phase 8 — Packaging & Distribution
+- Electron builder config for Mac (DMG) + Windows (NSIS)
+- Code signing (macOS notarization + Windows Authenticode)
+- Auto-update channel (GitHub Releases)
+- Python backend bundled with PyInstaller
+- Combined installer (Electron + Python backend)
 
 ---
 
-## Phase 4 — Desktop Automation Agent (Weeks 4–5)
+## Technology Stack
 
-**Goal:** Fully functional background agent that controls the desktop.
-
-### Agent Responsibilities
-- Run as invisible background process (no console window — use `pythonw.exe` on Windows or `subprocess` with `CREATE_NO_WINDOW` flag)
-- Listen for commands from backend via local HTTP/WebSocket
-- Execute desktop actions using Windows APIs
-
-### Desktop Controller (`agent/desktop_controller.py`)
-
-```python
-class DesktopController:
-    def open_application(self, name: str) -> bool
-    def close_application(self, name: str) -> bool
-    def launch_url(self, url: str) -> bool
-    def search_google(self, query: str) -> bool
-    def search_youtube(self, query: str) -> bool
-    def play_youtube_video(self, video_id: str) -> bool
-    def control_media(self, action: str) -> bool      # play, pause, skip, volume
-    def set_volume(self, level: int) -> bool
-    def set_brightness(self, level: int) -> bool
-    def take_screenshot(self) -> str                   # returns file path
-    def read_clipboard(self) -> str
-    def write_clipboard(self, text: str) -> bool
-    def type_text(self, text: str) -> bool
-    def press_keys(self, keys: list) -> bool
-    def move_mouse(self, x: int, y: int) -> bool
-    def click_mouse(self, button: str = "left") -> bool
-    def scroll(self, direction: str) -> bool
-    def lock_pc(self) -> bool
-    def sleep_pc(self) -> bool
-    def restart_pc(self) -> bool
-    def shutdown_pc(self) -> bool
-```
-
-### Safety Layer (`agent/safety.py`)
-- Require confirmation for: file deletion, drive formatting, system shutdown, restart, sleep, financial actions
-- Return exact error reasons when automation fails
-- Log every action with timestamp and result
-
-### Wake Word & Voice Activity Detection (`agent/wake_word.py`)
-- Use `speechrecognition` library with `pyaudio` for always-on listening
-- Wake word detection: "Hey Woxus", "Woxus"
-- Voice activity detection (VAD) to detect when user starts/stops speaking
-- Interrupt support — stop TTS immediately when user speaks
-
-### Activity Monitor (`agent/activity_monitor.py`)
-- Track: active window title, keyboard idle time, mouse idle time, running processes
-- Feed to proactive engine for conversation initiation
-
-### Deliverables
-- [ ] Agent runs invisibly (no console window)
-- [ ] All desktop control methods implemented and tested
-- [ ] Wake word detection working
-- [ ] Voice activity detection working
-- [ ] Interrupt support working
-- [ ] Activity monitor tracking active window, keyboard/mouse idle time
-- [ ] Safety confirmations for dangerous actions
-- [ ] Every action logged with timestamp and result
+| Layer | Technology |
+|-------|-----------|
+| Desktop Shell | Electron (main process) |
+| Frontend | React + TypeScript + Vite |
+| Styling | Tailwind CSS v4 + HeroUI v3 |
+| State | Zustand |
+| Backend | Python + FastAPI |
+| AI | Google Gemini (Live API) |
+| Desktop Automation | nut.js (cross-platform) |
+| Admin Panel | Next.js |
+| Database (admin) | PostgreSQL or SQLite |
+| Database (local) | SQLite |
+| Auth (admin) | NextAuth or JWT |
+| Payments | Stripe / PayPal |
+| Packaging | electron-builder + PyInstaller |
+| Auto-Update | electron-updater |
 
 ---
 
-## Phase 5 — Frontend (Weeks 5–7)
+## Platform Support
 
-**Goal:** Premium glassmorphism UI matching the Woxus AURORA ROSE theme.
-
-### Design System
-
-| Token | Value |
-|-------|-------|
-| Primary | `#9D7BFF` (Soft Violet) |
-| Secondary | `#E7B7A5` (Rose Gold) |
-| Accent | `#C6A0FF` (Neon Lavender) |
-| Background | Dark glassmorphism (`rgba(20, 20, 40, 0.85)` + blur) |
-| Surface | Glass panels with backdrop blur |
-| Text | White/light gray |
-| Radius | 16px |
-| Shadows | Soft, colored |
-
-### Pages & Components
-
-1. **Chat Page** — Chat bubbles, markdown rendering, code highlighting, copy buttons, streaming with typing animation, stop generation, regenerate/edit/delete, search chat, pinned chats
-2. **Sidebar** — New Chat, History, Pinned, Settings, Memory, Tools, Models, Voice, Themes, About
-3. **Settings Page** — Theme, accent color, voice provider, language, microphone/speaker selection, startup options, notifications, model selection, API keys (with validation), memory options, performance, developer mode, reset
-4. **Memory Page** — List all memories, search, edit, delete, export/import, semantic search
-5. **Voice Panel** — Push-to-talk toggle, always-listening toggle, wake word config, VAD sensitivity, STT/TTS provider selection, microphone/speaker selection, interrupt toggle
-6. **Tools Panel** — Desktop control dashboard, browser control, system controls
-
-### State Management
-Zustand for global state, React Query for API calls.
-
-### Key UX Details
-- Voice orb animation (pulsing when listening, glowing when speaking)
-- Animated waveform during TTS playback
-- Smooth page transitions (framer-motion)
-- 120 FPS animations where possible
-- Responsive, keyboard-accessible
-- Dark mode default, light mode toggle
-
-### Deliverables
-- [ ] React + TypeScript project initialized with Vite
-- [ ] Tailwind CSS configured with Woxus theme
-- [ ] Chat page fully functional (streaming, typing animation, stop, regenerate, edit, delete)
-- [ ] Sidebar with all navigation items
-- [ ] Settings page with all configuration options
-- [ ] Memory panel with CRUD + search
-- [ ] Voice panel with all controls
-- [ ] Tools panel with desktop control dashboard
-- [ ] Glassmorphism UI matching AURORA ROSE theme
-- [ ] WebSocket integration for streaming and real-time events
-- [ ] Dark mode + light mode toggle
-
----
-
-## Phase 6 — Voice Integration (Weeks 7–8)
-
-**Goal:** Full-duplex voice conversation — the core differentiator.
-
-### Voice Pipeline
-```
-Microphone → STT (streaming) → Backend → Gemini (streaming) → TTS (streaming) → Speaker
-```
-
-### STT
-- Google Speech-to-Text streaming API or Whisper.cpp for local fallback
-- Real-time transcription with interim results
-
-### TTS
-- Primary: ElevenLabs (emotional, expressive voices)
-- Secondary: Cartesia (fast, low-latency)
-- Fallback: `pyttsx3` (local, free)
-
-### Streaming TTS
-Start playing audio as soon as first chunk arrives — don't wait for full response.
-
-### Full-Duplex
-- Always listening (no button press)
-- Interrupt Woxus mid-speech → pause TTS → listen → respond
-- Natural turn-taking with human-like pauses (100–300ms)
-- Breathing effects and pacing variations
-
-### Emotional Voice
-ElevenLabs supports emotion labels — map Woxus's internal emotion state to voice parameters (warmth, speed, pitch, stability).
-
-### Deliverables
-- [ ] STT streaming pipeline working
-- [ ] TTS streaming pipeline working (ElevenLabs → Cartesia → pyttsx3 fallback)
-- [ ] Full-duplex: always-on listening, no push-to-talk
-- [ ] Wake word: "Hey Woxus", "Woxus"
-- [ ] Interrupt support: Woxus stops speaking when user starts talking
-- [ ] Natural turn-taking with human-like pauses
-- [ ] Emotional voice mapping (emotion state → voice parameters)
-
----
-
-## Phase 7 — Proactive Engine (Week 8)
-
-**Goal:** Woxus initiates conversations unprompted based on context.
-
-### Evaluation Loop (every 10–30 seconds)
-1. Check user activity (active app, keyboard/mouse idle time)
-2. Check time of day
-3. Check memory (relevant context)
-4. Check emotional indicators (conversation tone, recent interactions)
-5. Decide: respond / ask / encourage / observe / initiate / skip
-
-### Initiation Examples
-- User coding 3+ hours → "Want to take a break?"
-- User opened analytics → "You've been checking analytics again."
-- Morning → "Good morning. How'd you sleep?"
-- User seems frustrated (typing fast, deleting) → "You seem stressed. Want to talk?"
-
-### Deliverables
-- [ ] Proactive evaluation loop implemented
-- [ ] Activity monitoring feeds into decision engine
-- [ ] Contextual conversation initiation working
-- [ ] Initiations feel helpful, not annoying
-- [ ] User can disable proactive behavior in settings
-
----
-
-## Phase 8 — Windows Desktop Packaging (Weeks 9–10)
-
-**Goal:** Single `Woxus.exe` that works on a clean Windows machine.
-
-### Approach: Tauri + Python subprocess
-
-Tauri bundles the React frontend into a native Windows shell. The Python backend runs as a managed subprocess spawned by Tauri's Rust backend.
-
-### Startup Sequence
-```
-User double-clicks Woxus.exe
-  → Tauri app launches (no terminal window)
-  → Rust backend starts Python subprocess (pythonw.exe, hidden window)
-  → Python backend starts FastAPI server on localhost:8000
-  → Rust backend waits for health endpoint (GET /health)
-  → Frontend connects to backend via WebSocket
-  → Status shows "🟢 Woxus Online"
-  → If backend crashes → auto-restart (max 3 retries)
-  → If port occupied → detect existing instance, reconnect
-```
-
-### Packaging
-- Use `PyInstaller` or `Nuitka` to bundle Python backend into a single directory
-- Include Python runtime (embed `python311.dll` + stdlib)
-- Bundle all dependencies (DLLs, .pyd files)
-- Tauri bundles frontend as static assets
-- NSIS or Inno Setup creates installer with:
-  - Desktop shortcut
-  - Start menu entry
-  - Uninstaller
-  - Taskbar icon
-  - System tray icon
-  - Auto-launch registry entry (optional)
-
-### Windows-Specific Features
-- App icon (.ico)
-- Splash screen on launch
-- System tray with context menu (Open, Settings, Quit)
-- Remember window size and position
-- Start minimized to tray option
-- Close to tray (not exit)
-- Single instance (mutex)
-- Windows toast notifications
-- Auto-update architecture (check GitHub releases)
-
-### Deliverables
-- [ ] Tauri app builds successfully
-- [ ] Python backend bundled with PyInstaller
-- [ ] Backend auto-starts when Woxus.exe launches
-- [ ] Health check works, frontend connects automatically
-- [ ] Status shows "🟢 Woxus Online" on clean launch
-- [ ] Backend auto-restarts if it crashes (max 3 retries)
-- [ ] Port conflict detection and reconnect
-- [ ] Installer created with NSIS/Inno Setup
-- [ ] Portable version created
-- [ ] All Windows features working (tray, single instance, close-to-tray, etc.)
-
----
-
-## Phase 9 — Polish & Production (Weeks 10–11)
-
-**Goal:** Production-ready build with full test coverage.
-
-### Quality Checklist
-- [ ] No placeholder code, no TODO comments, no dummy UI
-- [ ] Error handling on every API call — never silently fail
-- [ ] Structured logging (JSON, rotate, levels)
-- [ ] Input validation on all endpoints
-- [ ] Encrypted local settings (AES-256 via `cryptography` library)
-- [ ] Crash recovery — auto-restart backend if it crashes
-- [ ] Performance: lazy loading, caching, multithreading, non-blocking UI
-- [ ] Security: no hardcoded secrets, input sanitization, API key encryption
-- [ ] Build script (`build.ps1`) that does everything in one command
-
-### Build Script (`build.ps1`)
-```
-.\build.ps1
-→ Install dependencies
-→ Build frontend
-→ Build backend (PyInstaller)
-→ Bundle everything
-→ Generate installer
-→ Generate portable version
-→ Output: Woxus.exe, Woxus Installer.exe, Portable.zip
-```
-
-### Verification Steps
-1. Build `Woxus.exe`
-2. Test on clean Windows VM (no Python installed)
-3. Verify double-click launches, backend auto-starts, status shows "Woxus Online"
-4. Test all desktop automation features (YouTube, browser, apps, files)
-5. Test voice pipeline (STT → Gemini → TTS)
-6. Test memory (add fact → restart → recall)
-7. Test settings (API keys, theme, voice providers)
-8. Test installer/uninstaller
-
-### Deliverables
-- [ ] Full production build passes all verification steps
-- [ ] `Woxus.exe` launches on clean Windows machine without Python
-- [ ] All desktop automation features work
-- [ ] Voice pipeline works end-to-end
-- [ ] Memory persists across restarts
-- [ ] Installer/uninstaller work correctly
-- [ ] Build script (`build.ps1`) produces all outputs in one command
-- [ ] README with build instructions, release notes, license
+| Feature | macOS | Windows |
+|---------|-------|---------|
+| System tray | ✅ | ✅ |
+| Auto-launch | ✅ | ✅ |
+| Terminal (bash/zsh) | ✅ | ✅ (PowerShell) |
+| nut.js automation | ✅ | ✅ |
+| File picker | ✅ | ✅ |
+| Global hotkey | ✅ | ✅ |
+| Code signing | ✅ (notarization) | ✅ (Authenticode) |
+| Installer | DMG | NSIS |
 
 ---
 
@@ -541,24 +365,25 @@ User double-clicks Woxus.exe
 
 | Phase | Duration | Milestone |
 |-------|----------|-----------|
-| 1. Scaffolding | 1 week | Project structure, all files created, deps installed |
-| 2. Backend Core | 2 weeks | FastAPI + Gemini + WebSocket + all API routes |
-| 3. Memory Engine | 2 weeks | Persistent memory with extraction, retrieval, ranking |
-| 4. Desktop Agent | 2 weeks | Full desktop automation, wake word, activity monitor |
-| 5. Frontend | 3 weeks | Glassmorphism UI, chat, settings, memory panel |
-| 6. Voice Integration | 2 weeks | Full-duplex voice, streaming STT/TTS, interrupt |
-| 7. Proactive Engine | 1 week | Context-aware conversation initiation |
-| 8. Packaging | 2 weeks | Tauri build, installer, standalone .exe |
-| 9. Polish | 2 weeks | Testing, quality, build script, verification |
+| 1. Scaffolding | 1 week | Project structure, all apps skeleton |
+| 2. Backend Core | 2 weeks | All 24 FastAPI endpoints, Gemini Live, license/trial middleware |
+| 3. Electron App | 2 weeks | Tray, white theme UI, all pages |
+| 4. License + Trial | 1 week | Key system, 10-min trial, device fingerprint |
+| 5. Prompt Writer | 2 weeks | nut.js automation, overlay, AI prompt gen |
+| 6. Terminal + Files | 1 week | Terminal with retry, file writer |
+| 7. Admin Panel | 2 weeks | Next.js, user mgmt, keys, payments, logs |
+| 8. Packaging | 2 weeks | Builds, signing, auto-update, installers |
 
-**Total estimated timeline: ~15 weeks (3.5 months)**
+**Total: ~13 weeks (3 months)**
 
 ---
 
 ## Immediate Next Steps
 
-1. Initialize git repo in `/Users/nishantpatel/Desktop/woxus-core`
-2. Create the full directory structure above
-3. Set up `.gitignore` (exclude `node_modules`, `__pycache__`, `.env`, `logs/`, `build/`)
-4. Create `.env.example` with all required API key placeholders
-5. Start with **Phase 1** — scaffolding the backend and frontend skeletons
+1. [x] Scaffold Electron + React frontend
+2. [x] Scaffold Python FastAPI backend
+3. [x] Build admin/ directory with Next.js
+4. [x] CI/CD — GitHub Actions for Mac + Windows + backend
+5. [ ] Add system tray + background service (Phase 3)
+6. [ ] Implement license gate (Phase 4)
+7. [x] Backend endpoint implementation (Phase 2)

@@ -1,3 +1,6 @@
+import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback } from '@heroui/react';
+
 interface ChatBubbleProps {
   role: string;
   content: string;
@@ -6,13 +9,28 @@ interface ChatBubbleProps {
 export default function ChatBubble({ role, content }: ChatBubbleProps) {
   const isUser = role === 'user';
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} fade-in`}>
-      <div className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-        isUser
-          ? 'bg-gradient-to-br from-primary/30 to-accent/20 rounded-br-md'
-          : 'bg-white/10 rounded-bl-md'
-      }`}>
-        <p className="text-sm leading-relaxed">{content}</p>
+    <div className={cn('flex items-start gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
+      <Avatar className="h-7 w-7 mt-0.5 shrink-0">
+        <AvatarFallback
+          className={cn(
+            'text-[8px] font-medium',
+            isUser
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-gradient-to-br from-violet-500 to-indigo-600 text-white'
+          )}
+        >
+          {isUser ? 'U' : 'W'}
+        </AvatarFallback>
+      </Avatar>
+      <div
+        className={cn(
+          'max-w-[70%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed',
+          isUser
+            ? 'bg-primary text-primary-foreground rounded-tr-sm'
+            : 'bg-muted text-foreground rounded-tl-sm'
+        )}
+      >
+        {content}
       </div>
     </div>
   );

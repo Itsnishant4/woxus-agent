@@ -116,12 +116,12 @@ def get_trial_status(hardware_id: str) -> dict:
     trials = _load_trials()
     if hardware_id not in trials:
         total_seconds = _get_trial_duration_from_mongo()
-    return {
-        "active": False,
-        "remaining_seconds": 0,
-        "total_seconds": total_seconds,
-        "email": None,
-    }
+        return {
+            "active": False,
+            "remaining_seconds": 0,
+            "total_seconds": total_seconds,
+            "email": None,
+        }
     rec = trials[hardware_id]
     started = datetime.fromisoformat(rec["started_at"])
     elapsed = (datetime.utcnow() - started).total_seconds()

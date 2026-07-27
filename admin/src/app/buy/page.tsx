@@ -43,14 +43,11 @@ function BuyPage() {
   useEffect(() => {
     setHardwareId(urlHardwareId);
     setHardwareFromApp(!!urlHardwareId);
-    if (urlPlan === "monthly") setSelected("monthly");
     if (urlHardwareId) {
-      setStep("form");
       localStorage.setItem("woxus_hardware_id", urlHardwareId);
-    } else {
-      setStep("plans");
     }
-  }, [urlHardwareId, urlPlan]);
+    setStep("plans");
+  }, [urlHardwareId]);
 
   useEffect(() => {
     fetch("/api/pricing")
@@ -247,11 +244,9 @@ function BuyPage() {
               Pay {selectedPlan.currency === "USD" ? "$" : "\u20B9"}{selectedPlan.price}
             </button>
 
-            {!hardwareFromApp && (
-              <button onClick={() => setStep("plans")} className="w-full text-xs text-zinc-500 hover:text-zinc-400">
+            <button onClick={() => setStep("plans")} className="w-full text-xs text-zinc-500 hover:text-zinc-400">
                 &larr; Choose different plan
               </button>
-            )}
           </div>
         )}
 

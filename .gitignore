@@ -40,8 +40,12 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Tauri
-tauri.conf.json
+# Build output
+dist-electron/
+release/
+
+# Electron
+*.asar
 
 # PyInstaller
 *.spec

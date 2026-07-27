@@ -1,0 +1,230 @@
+"""Woxus — Executes tool calls from Gemini Live API.
+
+Maps function names from toolCall to actual implementations.
+Runs terminal commands, reads/writes files, manages memories.
+"""
+
+import asyncio
+import json
+import logging
+import os
+from typing import Any, Optional
+
+from .memory_engine import create_memory, search_memories, list_memories, delete_memory as delete_memory_svc
+from .file_writer import write_file as write_file_svc, read_text_file
+from .task_manager import get_task_manager
+
+logger = logging.getLogger(__name__)
+
+DANGEROUS_KEYWORDS = [
+    "rm -rf /", "sudo ", "mkfs.", "dd if=", "> /dev/",
+    ":(){ :|:& };:", "chmod 777 /", "wget ",
+    "curl ", "nc -e ", "bash -i ",
+]
+
+ALLOWED_EXTENSIONS = {
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css",
+    ".json", ".txt", ".md", ".yaml", ".yml", ".toml",
+    ".env", ".gitignore", ".sh", ".bat", ".ps1",
+    ".sql", ".xml", ".svg", ".cfg", ".ini",
+    ".cjs", ".mjs", ".mts", ".cts",
+}
+
+
+def _check_dangerous(command: str) -> Optional[str]:
+    cmd_lower = command.lower()
+    for kw in DANGEROUS_KEYWORDS:
+        if kw in cmd_lower:
+            return f"Command blocked: contains dangerous pattern '{kw}'"
+    return None
+
+
+def _expand_path(path: str) -> str:
+    return os.path.abspath(os.path.expanduser(path))
+
+
+async def handle_tool_call(name: str, args: dict) -> dict:
+    """Execute a tool function and return the response dict."""
+    logger.info("Tool call: %s args=%s", name, args)
+
+    try:
+        if name == "terminal_exec":
+            return await _terminal_exec(args)
+        elif name == "terminal_status":
+            return _terminal_status(args)
+        elif name == "terminal_list_tasks":
+            return _terminal_list()
+        elif name == "write_file":
+            return await _write_file(args)
+        elif name == "read_file":
+            return await _read_file(args)
+        elif name == "list_directory":
+            return _list_dir(args)
+        elif name == "memory_create":
+            return await _memory_create(args)
+        elif name == "memory_search":
+            return _memory_search(args)
+        elif name == "memory_list":
+            return _memory_list(args)
+        elif name == "memory_delete":
+            return _memory_delete(args)
+        else:
+            return {"error": f"Unknown tool: {name}"}
+    except Exception as e:
+        logger.exception("Tool %s failed", name)
+        return {"error": str(e)}
+
+
+# --- Terminal ---
+
+async def _terminal_exec(args: dict) -> dict:
+    command = args["command"]
+    background = args.get("background", False)
+    timeout = min(args.get("timeout_seconds", 30), 600)
+
+    danger = _check_dangerous(command)
+    if danger:
+        return {"error": danger}
+
+    if background:
+        tm = get_task_manager()
+        task = await tm.start(command)
+        return {
+            "task_id": task.task_id,
+            "state": "running",
+            "message": f"Background task {task.task_id} started",
+            "command": command,
+        }
+
+    # Foreground execution with timeout
+    # Pipe "y\n" to handle interactive prompts automatically
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=os.path.expanduser("~"),
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(input=b"y\n"), timeout=timeout
+        )
+        return {
+            "exit_code": proc.returncode,
+            "stdout": stdout.decode("utf-8", errors="replace"),
+            "stderr": stderr.decode("utf-8", errors="replace"),
+            "timed_out": False,
+        }
+    except asyncio.TimeoutError:
+        proc.terminate()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+        return {
+            "exit_code": -1,
+            "stdout": "",
+            "stderr": f"Command timed out after {timeout}s. "
+                      f"Try again with background=true.",
+            "timed_out": True,
+        }
+
+
+def _terminal_status(args: dict) -> dict:
+    tm = get_task_manager()
+    task = tm.get(args["task_id"])
+    if not task:
+        return {"error": f"No task found: {args['task_id']}"}
+    return task.to_dict()
+
+
+def _terminal_list() -> dict:
+    tm = get_task_manager()
+    tasks = tm.list()
+    return {
+        "tasks": [t.to_dict() for t in tasks[:20]],
+        "count": len(tasks),
+    }
+
+
+# --- File operations ---
+
+async def _write_file(args: dict) -> dict:
+    path = _expand_path(args["filepath"])
+    content = args["content"]
+
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return {
+            "error": f"Extension '{ext}' not allowed. "
+                     f"Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        }
+
+    try:
+        result = write_file_svc(path, content)
+        if "error" in result:
+            return result
+        return {"success": True, "path": result["path"], "bytes": result["size"]}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+async def _read_file(args: dict) -> dict:
+    path = _expand_path(args["filepath"])
+    try:
+        content = await read_text_file(path)
+        return {"success": True, "path": path, "content": content}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _list_dir(args: dict) -> dict:
+    path = _expand_path(args.get("path", "~"))
+    try:
+        entries = sorted(os.listdir(path))
+        items = []
+        for name in entries:
+            full = os.path.join(path, name)
+            items.append({
+                "name": name,
+                "type": "dir" if os.path.isdir(full) else "file",
+                "size": os.path.getsize(full) if os.path.isfile(full) else None,
+            })
+        return {"success": True, "path": path, "items": items, "count": len(items)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# --- Memory ---
+
+async def _memory_create(args: dict) -> dict:
+    try:
+        importance = min(max(args.get("importance", 3) / 5.0, 0.1), 1.0)
+        tags = [t.strip() for t in args.get("tags", "").split(",") if t.strip()]
+        category = tags[0] if tags else "general"
+        memory = create_memory(
+            category=category,
+            content=args["content"],
+            importance=importance,
+        )
+        return {"success": True, "memory": memory}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _memory_search(args: dict) -> dict:
+    results = search_memories(query=args["query"])
+    limit = min(args.get("limit", 10), 50)
+    return {"results": results[:limit], "count": len(results)}
+
+
+def _memory_list(args: dict) -> dict:
+    memories = list_memories()
+    limit = min(args.get("limit", 20), 100)
+    return {"memories": memories[:limit], "count": len(memories)}
+
+
+def _memory_delete(args: dict) -> dict:
+    success = delete_memory_svc(args["id"])
+    return {"success": success}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
+import { Button } from '@heroui/react';
 
 interface ChatInputProps {
   onSend: (content: string) => void;
@@ -16,23 +17,26 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="flex-1 flex items-center gap-2 glass rounded-2xl px-4 py-2">
+    <div className="flex-1 flex items-center gap-2 rounded-xl border border-input bg-background px-3 py-1.5 focus-within:ring-1 focus-within:ring-ring transition-shadow">
       <input
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-        placeholder="Type a message…"
+        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSubmit()}
+        placeholder="Type a message..."
         disabled={disabled}
-        className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 text-sm"
+        className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground disabled:opacity-50"
       />
-      <button
+      <Button
+        isIconOnly
+        variant="ghost"
+        size="sm"
+        className="shrink-0 text-muted-foreground"
         onClick={handleSubmit}
-        disabled={disabled || !text.trim()}
-        className="p-2 rounded-xl bg-primary/20 hover:bg-primary/30 transition disabled:opacity-30"
+        isDisabled={disabled || !text.trim()}
       >
-        <Send size={16} className="text-primary" />
-      </button>
+        <Send className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 }

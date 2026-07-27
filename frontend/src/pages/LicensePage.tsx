@@ -21,9 +21,10 @@ export default function LicensePage({ onActivated }: Props) {
   const [licenseError, setLicenseError] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  const [trialSec, setTrialSec] = useState(0);
-  const [trialTotal, setTrialTotal] = useState(600);
-  const [startingTrial, setStartingTrial] = useState(false);
+const [trialSec, setTrialSec] = useState(0);
+const [trialTotal, setTrialTotal] = useState(600);
+const [startingTrial, setStartingTrial] = useState(false);
+const [trialEmail, setTrialEmail] = useState("");
 
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
@@ -58,6 +59,7 @@ export default function LicensePage({ onActivated }: Props) {
       if (data.active) {
         setTrialSec(data.remaining_seconds);
         setTrialTotal(data.total_seconds);
+        setTrialEmail(data.email || "");
         setState("trial");
         return;
       }
@@ -125,12 +127,13 @@ export default function LicensePage({ onActivated }: Props) {
       const res = await fetch(`${API}/trial/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hardware_id: hwid }),
+        body: JSON.stringify({ hardware_id: hwid, email: trialEmail }),
       });
       const data = await res.json();
       if (data.active) {
         setTrialSec(data.remaining_seconds);
         setTrialTotal(data.total_seconds);
+        setTrialEmail(data.email || trialEmail);
         setState("trial");
         onActivated?.();
       }
@@ -236,6 +239,9 @@ export default function LicensePage({ onActivated }: Props) {
         <CardContent>
           {state === "trial" ? (
             <div className="space-y-3">
+              {trialEmail && (
+                <p className="text-xs text-muted-foreground">Email: {trialEmail}</p>
+              )}
               <div className="w-full bg-accent rounded-full h-2.5">
                 <div
                   className="h-2.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-1000"
@@ -252,9 +258,16 @@ export default function LicensePage({ onActivated }: Props) {
               <p className="text-sm text-muted-foreground">
                 Start a free trial to explore Woxus with no commitment.
               </p>
+              <input
+                type="email"
+                value={trialEmail}
+                onChange={(e) => setTrialEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
               <button
                 onClick={handleStartTrial}
-                disabled={startingTrial}
+                disabled={startingTrial || !trialEmail.trim()}
                 className="w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 transition-all"
               >
                 {startingTrial ? "Starting..." : "Start Free Trial"}

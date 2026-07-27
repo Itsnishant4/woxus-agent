@@ -7,6 +7,7 @@ interface User {
   _id: string;
   hardwareId: string;
   deviceInfo?: string;
+  email?: string;
   blocked: boolean;
   trialActive: boolean;
   trialDurationSeconds: number;
@@ -51,7 +52,7 @@ export default function UsersPage() {
         <p className="text-sm text-muted-foreground mt-1">{total} registered users</p>
       </div>
 
-      <input placeholder="Search by hardware ID, device, or license..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="w-full max-w-sm px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+      <input placeholder="Search by hardware ID, email, device, or license..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="w-full max-w-sm px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="p-0 overflow-x-auto">
@@ -59,6 +60,7 @@ export default function UsersPage() {
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="px-4 py-3 font-medium">HARDWARE ID</th>
+                <th className="px-4 py-3 font-medium">EMAIL</th>
                 <th className="px-4 py-3 font-medium">DEVICE</th>
                 <th className="px-4 py-3 font-medium">STATUS</th>
                 <th className="px-4 py-3 font-medium">TRIAL</th>
@@ -70,11 +72,12 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {users.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">No users found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">No users found</td></tr>
               )}
               {users.map((u) => (
                 <tr key={u._id} className="border-b border-border/50 hover:bg-accent/30">
                   <td className="px-4 py-3"><code className="text-xs">{u.hardwareId.slice(0, 20)}...</code></td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground max-w-[120px] truncate">{u.email || "—"}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground max-w-[120px] truncate">{u.deviceInfo || "—"}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${u.blocked ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500"}`}>

@@ -114,12 +114,14 @@ class LicenseVerifyResponse(BaseModel):
 class TrialStartRequest(BaseModel):
     hardware_id: str
     device_info: Optional[str] = None
+    email: Optional[str] = None
 
 
 class TrialStatusResponse(BaseModel):
     active: bool
     remaining_seconds: int
     total_seconds: int
+    email: Optional[str] = None
 
 
 class FeedbackSubmit(BaseModel):

@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
       { hardwareId: { $regex: q, $options: "i" } },
       { deviceInfo: { $regex: q, $options: "i" } },
       { licenseKey: { $regex: q, $options: "i" } },
+      { email: { $regex: q, $options: "i" } },
     ];
   }
 

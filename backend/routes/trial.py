@@ -14,11 +14,12 @@ async def trial_start(req: TrialStartRequest):
     if not req.hardware_id:
         raise HTTPException(400, "hardware_id required")
 
-    status = trial_tracker.start_trial(req.hardware_id, req.device_info)
+    status = trial_tracker.start_trial(req.hardware_id, req.device_info, req.email)
     return TrialStatusResponse(
         active=status["active"],
         remaining_seconds=status["remaining_seconds"],
         total_seconds=status["total_seconds"],
+        email=status.get("email"),
     )
 
 
@@ -32,4 +33,5 @@ async def trial_status(hardware_id: str):
         active=status["active"],
         remaining_seconds=status["remaining_seconds"],
         total_seconds=status["total_seconds"],
+        email=status.get("email"),
     )

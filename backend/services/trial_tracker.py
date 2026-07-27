@@ -27,6 +27,29 @@ def _get_trial_duration_from_mongo() -> int:
     return TRIAL_DURATION_SECONDS
 
 
+def _has_existing_trial_in_mongo(hardware_id: str, email: Optional[str]) -> Optional[dict]:
+    try:
+        import pymongo
+        uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
+        client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
+        db = client.get_database()
+        query: dict[str, str] = {"hardwareId": hardware_id}
+        existing = db.users.find_one(query)
+        if not existing and email:
+            existing = db.users.find_one({"email": email})
+        client.close()
+        if existing:
+            return {
+                "active": existing.get("trialActive", False),
+                "remaining_seconds": 0,
+                "total_seconds": existing.get("trialDurationSeconds", TRIAL_DURATION_SECONDS),
+                "email": existing.get("email", ""),
+            }
+    except Exception as e:
+        logger.warning(f"Could not check trial in MongoDB: {e}")
+    return None
+
+
 def _upsert_user_to_mongo(hardware_id: str, email: Optional[str], device_info: Optional[str], total_seconds: int):
     try:
         import pymongo
@@ -72,6 +95,10 @@ def _save_trials(trials: dict):
 def start_trial(hardware_id: str, device_info: Optional[str] = None, email: Optional[str] = None) -> dict:
     trials = _load_trials()
     total_seconds = _get_trial_duration_from_mongo()
+
+    existing_mongo = _has_existing_trial_in_mongo(hardware_id, email)
+    if existing_mongo and hardware_id not in trials:
+        return existing_mongo
 
     if hardware_id in trials:
         existing = trials[hardware_id]

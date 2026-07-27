@@ -62,4 +62,4 @@ release/
 
 # Editor
 *.tmp
-*.bak
+*.bakbackend/data/

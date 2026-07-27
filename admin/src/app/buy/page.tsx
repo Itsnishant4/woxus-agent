@@ -32,24 +32,32 @@ function BuyPage() {
   const urlPlan = searchParams.get("plan") || "";
 
   const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [selected, setSelected] = useState<string>(urlPlan === "monthly" ? "monthly" : "yearly");
+  const [selected, setSelected] = useState<string>("yearly");
   const [email, setEmail] = useState("");
-  const [hardwareId, setHardwareId] = useState(urlHardwareId);
-  const [hardwareFromApp, setHardwareFromApp] = useState(!!urlHardwareId);
-  const [step, setStep] = useState<"plans" | "form" | "processing" | "done">(urlHardwareId ? "form" : "plans");
+  const [hardwareId, setHardwareId] = useState("");
+  const [hardwareFromApp, setHardwareFromApp] = useState(false);
+  const [step, setStep] = useState<"loading" | "plans" | "form" | "processing" | "done">("loading");
   const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setHardwareId(urlHardwareId);
+    setHardwareFromApp(!!urlHardwareId);
+    if (urlPlan === "monthly") setSelected("monthly");
+    if (urlHardwareId) {
+      setStep("form");
+      localStorage.setItem("woxus_hardware_id", urlHardwareId);
+    } else {
+      setStep("plans");
+    }
+  }, [urlHardwareId, urlPlan]);
 
   useEffect(() => {
     fetch("/api/pricing")
       .then((r) => r.json())
       .then((d) => setPlans(d.plans))
       .catch(console.error);
-
-    if (urlHardwareId) {
-      localStorage.setItem("woxus_hardware_id", urlHardwareId);
-    }
-  }, [urlHardwareId]);
+  }, []);
 
   const selectedPlan = plans.find((p) => p.id === selected);
 
@@ -138,6 +146,10 @@ function BuyPage() {
         </div>
       </div>
     );
+  }
+
+  if (step === "loading") {
+    return <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-950 to-zinc-900"><p className="text-zinc-400 text-sm">Loading...</p></div>;
   }
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   Settings, Brain, FileText, Key,
@@ -9,6 +9,12 @@ import HomePage from '@pages/HomePage';
 import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
 import TasksPage from '@pages/TasksPage';
+import LicensePage from '@pages/LicensePage';
+import { getHardwareId } from '@/lib/hardware';
+
+const API = 'http://127.0.0.1:8000/api';
+
+type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
 
 const navItems = [
   { to: '/', icon: Zap, label: 'Home' },
@@ -102,11 +108,46 @@ function CmdPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
 }
 
 export default function App() {
+  const [appStatus, setAppStatus] = useState<AppStatus>('loading');
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');
   const [cmdOpen, setCmdOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const hwid = getHardwareId();
+
+  const checkLicense = useCallback(async () => {
+    const cached = localStorage.getItem('woxus_license_key');
+    if (cached) {
+      try {
+        const res = await fetch(`${API}/license/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ license_key: cached, hardware_id: hwid }),
+        });
+        const data = await res.json();
+        if (data.valid) {
+          setAppStatus('licensed');
+          return;
+        }
+      } catch { /* offline */ }
+    }
+
+    try {
+      const res = await fetch(`${API}/trial/status?hardware_id=${hwid}`);
+      const data = await res.json();
+      if (data.active) {
+        setAppStatus('trial');
+        return;
+      }
+    } catch { /* offline */ }
+
+    setAppStatus('unlicensed');
+  }, [hwid]);
+
+  useEffect(() => {
+    checkLicense();
+  }, [checkLicense]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -120,6 +161,29 @@ export default function App() {
   }, []);
 
   const s = statusConfig[agentStatus];
+
+  if (appStatus === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 mx-auto rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+            <span className="text-lg font-bold text-white">W</span>
+          </div>
+          <p className="text-sm text-muted-foreground animate-pulse">Checking license...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (appStatus === 'unlicensed') {
+    return (
+      <div className="flex h-screen bg-background">
+        <main className="flex-1 overflow-y-auto">
+          <LicensePage onActivated={checkLicense} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background text-foreground selection:bg-primary/10">
@@ -212,6 +276,7 @@ export default function App() {
         <div className="flex-1 overflow-hidden">
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/license" element={<LicensePage onActivated={checkLicense} />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/memory" element={<MemoryPage />} />
             <Route path="/tasks" element={<TasksPage />} />

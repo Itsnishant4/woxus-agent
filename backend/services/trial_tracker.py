@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,21 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TRIAL_FILE = DATA_DIR / "trials.json"
 TRIAL_DURATION_SECONDS = 600
+
+
+def _get_trial_duration_from_mongo() -> int:
+    try:
+        import pymongo
+        uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
+        client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
+        db = client.get_database()
+        setting = db.settings.find_one({"key": "trial_duration_seconds"})
+        client.close()
+        if setting:
+            return int(setting["value"])
+    except Exception as e:
+        logger.warning(f"Could not read trial duration from MongoDB: {e}")
+    return TRIAL_DURATION_SECONDS
 
 
 def _ensure_store():
@@ -31,6 +47,7 @@ def _save_trials(trials: dict):
 
 def start_trial(hardware_id: str, device_info: Optional[str] = None) -> dict:
     trials = _load_trials()
+    total_seconds = _get_trial_duration_from_mongo()
 
     if hardware_id in trials:
         existing = trials[hardware_id]
@@ -54,25 +71,26 @@ def start_trial(hardware_id: str, device_info: Optional[str] = None) -> dict:
         "hardware_id": hardware_id,
         "device_info": device_info or "",
         "started_at": datetime.utcnow().isoformat(),
-        "total_seconds": TRIAL_DURATION_SECONDS,
+        "total_seconds": total_seconds,
     }
     trials[hardware_id] = record
     _save_trials(trials)
 
     return {
         "active": True,
-        "remaining_seconds": TRIAL_DURATION_SECONDS,
-        "total_seconds": TRIAL_DURATION_SECONDS,
+        "remaining_seconds": total_seconds,
+        "total_seconds": total_seconds,
     }
 
 
 def get_trial_status(hardware_id: str) -> dict:
     trials = _load_trials()
     if hardware_id not in trials:
+        total_seconds = _get_trial_duration_from_mongo()
         return {
             "active": False,
             "remaining_seconds": 0,
-            "total_seconds": TRIAL_DURATION_SECONDS,
+            "total_seconds": total_seconds,
         }
     rec = trials[hardware_id]
     started = datetime.fromisoformat(rec["started_at"])

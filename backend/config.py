@@ -26,4 +26,5 @@ def load_config() -> dict[str, str]:
         "ALLOWED_COMMANDS": os.getenv("ALLOWED_COMMANDS", ""),
         "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
         "LOG_DIR": os.getenv("LOG_DIR", str(BASE_DIR / "logs")),
+        "MONGODB_URI": os.getenv("MONGODB_URI", ""),
     }

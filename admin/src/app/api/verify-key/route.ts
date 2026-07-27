@@ -1,26 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-
-interface VerifyRequest {
-  license_key: string;
-  hardware_id: string;
-}
-
-interface LicenseRecord {
-  key: string;
-  expiry: string | null;
-  features: string[];
-  hardware_ids: string[];
-  revoked: boolean;
-}
-
-// In-memory store for scaffold — replace with DB in Phase 7
-const LICENSES: LicenseRecord[] = [];
+import { connectDB } from "@/lib/mongodb/connection";
+import { License } from "@/models/License";
+import { User } from "@/models/User";
 
 export async function POST(req: NextRequest) {
   try {
-    const body: VerifyRequest = await req.json();
-    const { license_key, hardware_id } = body;
-
+    const { license_key, hardware_id } = await req.json();
     if (!license_key || !hardware_id) {
       return NextResponse.json(
         { valid: false, reason: "Missing license_key or hardware_id" },
@@ -28,7 +13,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const license = LICENSES.find((l) => l.key === license_key);
+    await connectDB();
+    const license = await License.findOne({ key: license_key });
 
     if (!license) {
       return NextResponse.json({ valid: false, reason: "Invalid license key" });
@@ -42,19 +28,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ valid: false, reason: "License key expired" });
     }
 
-    if (!license.hardware_ids.includes(hardware_id)) {
-      license.hardware_ids.push(hardware_id);
+    if (!license.hardwareIds.includes(hardware_id)) {
+      license.hardwareIds.push(hardware_id);
+      license.activationCount = license.hardwareIds.length;
+      await license.save();
     }
+
+    await User.findOneAndUpdate(
+      { hardwareId: hardware_id },
+      { licenseKey: license_key, lastActiveAt: new Date() },
+      { upsert: true }
+    );
 
     return NextResponse.json({
       valid: true,
-      expiry: license.expiry,
+      expiry: license.expiry?.toISOString() || null,
       features: license.features,
     });
   } catch {
-    return NextResponse.json(
-      { valid: false, reason: "Invalid request" },
-      { status: 400 }
-    );
+    return NextResponse.json({ valid: false, reason: "Invalid request" }, { status: 400 });
   }
 }

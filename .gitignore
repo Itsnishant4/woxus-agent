@@ -1,65 +1,56 @@
+
+# Build output
 # Dependencies
-node_modules/
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-.venv/
-
-# Build output
-build/
-dist/
-*.egg-info/
-*.egg
-*.whl
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment
-.env
-.env.local
-.env.*.local
-.env.*.json
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Build output
-dist-electron/
-release/
-
+# Editor
 # Electron
-*.asar
-
+# Environment
+# IDE
+# Logs
+# OS
 # PyInstaller
-*.spec
+# SQLite
+*$py.class
+*.asar
+*.bakbackend/data/
+*.db
+*.dll
+*.egg
+*.egg-info/
+*.exe
+*.log
 *.manifest
 *.pdb
-*.dll
-*.exe
+*.py[cod]
 *.pyd
-
-# SQLite
-*.db
+*.so
+*.spec
 *.sqlite
 *.sqlite-journal
-
-# Editor
+*.swo
+*.swp
 *.tmp
-*.bakbackend/data/
+*.whl
+*~
+.DS_Store
+.Python
+.env
+.env.*.json
+.env.*.local
+.env.local
+.idea/
+.venv/
+.vscode/
+Thumbs.db
+__pycache__/
+backend/data/
+build/
+dist-electron/
+dist/
+env/
+logs/
+node_modules/
+npm-debug.log*
+release/
+venv/
+yarn-debug.log*
+yarn-error.log*

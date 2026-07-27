@@ -319,7 +319,7 @@ const [trialEmail, setTrialEmail] = useState("");
             )}
             <div className="text-center">
               <a
-                href={`${BUY_URL}?hardwareId=${hwid}&plan=yearly`}
+                href={`${BUY_URL}?hardwareId=${hwid}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-violet-500 hover:text-violet-400 transition-colors"

@@ -346,6 +346,7 @@ const [trialExpired, setTrialExpired] = useState(false);
       </Card>
 
       {/* Feedback */}
+      {!feedbackSent && !feedbackError && (
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -403,6 +404,7 @@ const [trialExpired, setTrialExpired] = useState(false);
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

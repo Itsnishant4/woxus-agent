@@ -31,6 +31,7 @@ const [trialExpired, setTrialExpired] = useState(false);
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -153,12 +154,17 @@ const [trialExpired, setTrialExpired] = useState(false);
     if (feedbackRating === 0) return;
     setFeedbackSubmitting(true);
     try {
-      await fetch(`${API}/feedback/`, {
+      const res = await fetch(`${API}/feedback/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating: feedbackRating, text: feedbackText, hardware_id: hwid }),
       });
-      setFeedbackSent(true);
+      const data = await res.json();
+      if (data.status === "already_submitted") {
+        setFeedbackError("You already submitted feedback.");
+      } else {
+        setFeedbackSent(true);
+      }
     } catch {
       /* ignore */
     }
@@ -357,6 +363,11 @@ const [trialExpired, setTrialExpired] = useState(false);
             <div className="flex items-center gap-2 text-sm text-green-500">
               <CheckCircle className="h-4 w-4" />
               <span>Thanks for your feedback!</span>
+            </div>
+          ) : feedbackError ? (
+            <div className="flex items-center gap-2 text-sm text-amber-500">
+              <AlertCircle className="h-4 w-4" />
+              <span>{feedbackError}</span>
             </div>
           ) : (
             <div className="space-y-3">

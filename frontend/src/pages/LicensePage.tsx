@@ -30,7 +30,7 @@ const [trialExpired, setTrialExpired] = useState(false);
 
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
-  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(() => !!localStorage.getItem("woxus_feedback_submitted"));
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
@@ -161,8 +161,10 @@ const [trialExpired, setTrialExpired] = useState(false);
       });
       const data = await res.json();
       if (data.status === "already_submitted") {
+        localStorage.setItem("woxus_feedback_submitted", "1");
         setFeedbackError("You already submitted feedback.");
       } else {
+        localStorage.setItem("woxus_feedback_submitted", "1");
         setFeedbackSent(true);
       }
     } catch {

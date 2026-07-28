@@ -12,6 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..services.gemini_live import GeminiLiveService
 from ..services.tool_definitions import agent_tools
+from ..services.memory_engine import list_memories
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -68,11 +69,23 @@ async def gemini_live_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
+    memories = list_memories()
+    mem_lines = "\n".join(f"- {m['content']}" for m in memories) if memories else "None yet."
+    system_instruction = (
+        "You are Woxus, a desktop AI agent.\n\n"
+        "RULES:\n"
+        "- Output is shown in chat AND spoken as audio. Keep it under 10 words.\n"
+        "- No markdown, bold, headings, or descriptions of your actions.\n"
+        "- Use stored memories to personalize responses. Never ask to search memories.\n\n"
+        f"STORED MEMORIES:\n{mem_lines}"
+    )
+
     gemini_client = GeminiLiveService(
         api_key=gemini_api_key,
         models=gemini_models,
         input_sample_rate=16000,
         tools=agent_tools,
+        system_instruction=system_instruction,
     )
 
     async def receive_from_client():

@@ -35,12 +35,14 @@ class GeminiLiveService:
         models: list[str] | str,
         input_sample_rate: int = 16000,
         tools: Optional[list[Any]] = None,
+        system_instruction: Optional[str] = None,
     ):
         self.api_key = api_key
         self.models = [models] if isinstance(models, str) else models
         self.input_sample_rate = input_sample_rate
         self.client = genai.Client(api_key=api_key)
         self.tools = tools or []
+        self.system_instruction = system_instruction
         self._running = False
         self.active_model = ""
 
@@ -64,7 +66,7 @@ class GeminiLiveService:
                 )
             ),
             system_instruction=types.Content(parts=[
-                types.Part(text="You are Woxus, a desktop AI agent.\n\nINCORRECT output (never do this):\n**Initiating Memory Search** I am searching for your name.\n**Querying Identity** Let me look that up.\nI will now formulate a response.\n\nCORRECT output:\nHello Nishant!\nName?\nLanguage?\n\nRULES:\n- Output is shown in chat AND spoken as audio. Keep it under 10 words.\n- No markdown, bold, headings, or descriptions of your actions.\n- Session start: search memory. Found name+language? Greet. Not found? Ask 'Name?' or 'Language?'.")
+                types.Part(text=self.system_instruction or "You are Woxus, a desktop AI agent.\n\nRULES:\n- Output is shown in chat AND spoken as audio. Keep it under 10 words.\n- No markdown, bold, headings, or descriptions of your actions."),
             ]),
             tools=self.tools,
         )

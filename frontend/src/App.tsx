@@ -10,6 +10,7 @@ import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
+import ToastContainer from '@components/Toast';
 import { getHardwareId } from '@/lib/hardware';
 
 const API = 'http://127.0.0.1:8000/api';
@@ -181,6 +182,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto">
           <LicensePage onActivated={checkLicense} />
         </main>
+        <ToastContainer />
       </div>
     );
   }
@@ -286,6 +288,7 @@ export default function App() {
 
       {/* Command Palette */}
       <CmdPalette open={cmdOpen} onOpenChange={setCmdOpen} />
+      <ToastContainer />
     </div>
   );
 }

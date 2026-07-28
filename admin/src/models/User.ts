@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IUser extends Document {
   hardwareId: string;
   deviceInfo?: string;
+  email?: string;
   blocked: boolean;
   blockedAt?: Date;
   trialStartedAt?: Date;
@@ -19,6 +20,7 @@ const UserSchema = new Schema<IUser>(
   {
     hardwareId: { type: String, required: true, unique: true, index: true },
     deviceInfo: { type: String },
+    email: { type: String },
     blocked: { type: Boolean, default: false },
     blockedAt: { type: Date },
     trialStartedAt: { type: Date },

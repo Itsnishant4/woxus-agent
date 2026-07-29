@@ -27,7 +27,7 @@ export default function MemoryPage() {
       const res = await fetch(`${API}/memory/`);
       const data = await res.json();
       setMemories(Array.isArray(data) ? data : []);
-    } catch (e) {
+    } catch {
       toast.error('Failed to fetch memories');
     } finally {
       setLoading(false);

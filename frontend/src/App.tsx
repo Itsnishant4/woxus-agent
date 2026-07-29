@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Settings, Brain, FileText, Key,
+  Settings, Brain, Key,
   PanelLeft, Zap, ListChecks, Keyboard, Mic,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
@@ -20,7 +20,6 @@ type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
 const navItems = [
   { to: '/', icon: Zap, label: 'Home' },
   { to: '/tasks', icon: ListChecks, label: 'Tasks' },
-  { to: '/notes', icon: FileText, label: 'Notes' },
   { to: '/memory', icon: Brain, label: 'Memory' },
   { to: '/license', icon: Key, label: 'License' },
   { to: '/settings', icon: Settings, label: 'Settings' },

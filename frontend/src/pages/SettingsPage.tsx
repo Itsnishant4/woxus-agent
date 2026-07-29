@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, Label, Switch, Separator } from '@heroui/react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Switch, Separator } from '@heroui/react';
 import { Key, Palette, Bell, Shield, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -7,7 +7,7 @@ function AppearanceSection() {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <Label htmlFor="dark-mode" className="text-sm font-normal">Dark mode</Label>
+        <label htmlFor="dark-mode" className="text-sm font-medium text-foreground">Dark mode</label>
         <p className="text-xs text-muted-foreground">Toggle between light and dark theme</p>
       </div>
       <Switch isSelected={dark} onChange={toggle}>
@@ -44,7 +44,7 @@ const sections = [
     content: (
       <div className="flex items-center justify-between">
         <div>
-          <Label htmlFor="notif" className="text-sm font-normal">Enable notifications</Label>
+          <label htmlFor="notif" className="text-sm font-medium text-foreground">Enable notifications</label>
           <p className="text-xs text-muted-foreground">Receive alerts from Woxus</p>
         </div>
         <Switch>
@@ -80,7 +80,7 @@ const sections = [
 
 export default function SettingsPage() {
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
+    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8 h-full overflow-y-auto">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">Configure your Woxus agent</p>

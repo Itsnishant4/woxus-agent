@@ -9,10 +9,13 @@ function log(tag, msg) {
   console.log(`[${tag}] ${msg}`);
 }
 
-// Detect Python path (cross-platform venv)
-const pythonPath = isWin
+const fs = require('fs');
+
+// Detect Python path (cross-platform venv or fallback to system python)
+const venvPythonPath = isWin
   ? path.join(ROOT, 'backend', '.venv', 'Scripts', 'python.exe')
   : path.join(ROOT, 'backend', '.venv', 'bin', 'python');
+const pythonPath = fs.existsSync(venvPythonPath) ? venvPythonPath : (isWin ? 'python.exe' : 'python');
 
 // Start Python backend
 const backend = spawn(
@@ -41,7 +44,7 @@ setTimeout(() => {
     {
       cwd: path.join(ROOT, 'frontend'),
       stdio: 'inherit',
-      shell: false,
+      shell: isWin,
       env: { ...process.env },
     }
   );

@@ -1,14 +1,5 @@
 [
   {
-    "id": "8e0f461b27dd4bc8",
-    "category": "personal",
-    "content": "User's name is Nishant",
-    "importance": 1.0,
-    "active": true,
-    "created_at": "2026-07-26T14:51:30.537636",
-    "updated_at": "2026-07-26T14:51:30.537651"
-  },
-  {
     "id": "e80f91d1508d425e",
     "category": "preferences",
     "content": "User prefers to speak in Gujarati",
@@ -52,5 +43,32 @@
     "active": true,
     "created_at": "2026-07-26T16:54:39.628465",
     "updated_at": "2026-07-26T16:54:39.628476"
+  },
+  {
+    "id": "b7bfd3a940094cfd",
+    "category": "personal",
+    "content": "User's name is Kunal",
+    "importance": 0.6,
+    "active": true,
+    "created_at": "2026-07-28T16:24:13.474504",
+    "updated_at": "2026-07-28T16:24:13.474511"
+  },
+  {
+    "id": "7e989b7edfc74c64",
+    "category": "identity",
+    "content": "User's name is Kunal",
+    "importance": 0.8,
+    "active": true,
+    "created_at": "2026-07-28T16:49:13.010103",
+    "updated_at": "2026-07-28T16:49:13.010112"
+  },
+  {
+    "id": "b987b7688c8b4feb",
+    "category": "preferences",
+    "content": "User prefers Gujarati language",
+    "importance": 0.8,
+    "active": true,
+    "created_at": "2026-07-28T16:49:13.136011",
+    "updated_at": "2026-07-28T16:49:13.136023"
   }
 ]

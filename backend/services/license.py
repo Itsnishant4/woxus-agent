@@ -1,14 +1,30 @@
 import json
 import logging
 import uuid
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
+import pymongo
 
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 LICENSE_FILE = DATA_DIR / "licenses.json"
+
+_mongo_client = None
+
+def _get_mongo_collection():
+    global _mongo_client
+    uri = os.getenv("MONGODB_URI", "")
+    if not uri:
+        return None
+    try:
+        if _mongo_client is None:
+            _mongo_client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
+        return _mongo_client.get_database()["licenses"]
+    except Exception:
+        return None
 
 
 def _ensure_store():
@@ -62,4 +78,30 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
             "expiry": lic["expiry"],
             "features": lic.get("features", []),
         }
+
+    # Fallback: check MongoDB (admin-generated keys)
+    col = _get_mongo_collection()
+    if col is not None:
+        try:
+            doc = col.find_one({"key": license_key})
+            if doc:
+                if doc.get("revoked"):
+                    return {"valid": False, "reason": "License revoked"}
+                if doc.get("expiry") and doc["expiry"] < datetime.utcnow():
+                    return {"valid": False, "reason": "License expired"}
+                hw_ids = doc.get("hardwareIds") or []
+                if hardware_id not in hw_ids:
+                    col.update_one(
+                        {"_id": doc["_id"]},
+                        {"$push": {"hardwareIds": hardware_id}, "$inc": {"activationCount": 1}},
+                    )
+                expiry_str = doc["expiry"].isoformat() if doc.get("expiry") else None
+                return {
+                    "valid": True,
+                    "expiry": expiry_str,
+                    "features": doc.get("features", ["all"]),
+                }
+        except Exception:
+            logger.warning("MongoDB license check failed", exc_info=True)
+
     return {"valid": False, "reason": "Invalid license key"}

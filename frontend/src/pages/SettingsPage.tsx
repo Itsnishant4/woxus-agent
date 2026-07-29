@@ -1,5 +1,5 @@
 import { Card, CardContent, Switch, Separator } from '@heroui/react';
-import { Key, Palette, Bell, Shield, Info } from 'lucide-react';
+import { Palette, Bell, Shield, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
 function AppearanceSection() {
@@ -22,13 +22,6 @@ function AppearanceSection() {
 }
 
 const sections = [
-  {
-    id: 'api-keys',
-    title: 'API Keys',
-    description: 'Configure your Gemini API key for AI features',
-    icon: Key,
-    content: <p className="text-sm text-muted-foreground">No API keys configured yet.</p>,
-  },
   {
     id: 'appearance',
     title: 'Appearance',

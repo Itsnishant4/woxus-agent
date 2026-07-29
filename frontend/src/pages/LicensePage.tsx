@@ -50,6 +50,10 @@ const [trialExpired, setTrialExpired] = useState(false);
           setState("licensed");
           return;
         }
+        if (data.reason) {
+          setLicenseInput(cached);
+          setLicenseError(data.reason);
+        }
       } catch {
         /* offline — treat as unlicensed */
       }

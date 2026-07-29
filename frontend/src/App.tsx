@@ -12,6 +12,7 @@ import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
 import Toaster from '@components/Toast';
 import { getHardwareId } from '@/lib/hardware';
+import { useTheme } from '@/hooks/useTheme';
 
 const API = 'http://127.0.0.1:8000/api';
 
@@ -108,6 +109,7 @@ function CmdPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
 }
 
 export default function App() {
+  useTheme();
   const [appStatus, setAppStatus] = useState<AppStatus>('loading');
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');

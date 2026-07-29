@@ -1,5 +1,25 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Label, Switch, Separator } from '@heroui/react';
 import { Key, Palette, Bell, Shield, Info } from 'lucide-react';
+import { useTheme } from '@/hooks/useTheme';
+
+function AppearanceSection() {
+  const { dark, toggle } = useTheme();
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <Label htmlFor="dark-mode" className="text-sm font-normal">Dark mode</Label>
+        <p className="text-xs text-muted-foreground">Toggle between light and dark theme</p>
+      </div>
+      <Switch isSelected={dark} onChange={toggle}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch.Content>
+      </Switch>
+    </div>
+  );
+}
 
 const sections = [
   {
@@ -14,21 +34,7 @@ const sections = [
     title: 'Appearance',
     description: 'Customize how Woxus looks',
     icon: Palette,
-    content: (
-      <div className="flex items-center justify-between">
-        <div>
-          <Label htmlFor="dark-mode" className="text-sm font-normal">Dark mode</Label>
-          <p className="text-xs text-muted-foreground">Toggle between light and dark theme</p>
-        </div>
-        <Switch defaultSelected>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-          </Switch.Content>
-        </Switch>
-      </div>
-    ),
+    content: <AppearanceSection />,
   },
   {
     id: 'notifications',

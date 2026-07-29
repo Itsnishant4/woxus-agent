@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, Switch, Separator } from '@heroui/react';
+import { Card, CardContent, Switch, Separator } from '@heroui/react';
 import { Key, Palette, Bell, Shield, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -72,7 +72,7 @@ const sections = [
     content: (
       <div className="space-y-1 text-sm text-muted-foreground">
         <p>Woxus v0.1.0</p>
-        <p>Built with Electron + React + Tailwind v4</p>
+        <p>Built with love 🧡 Team Woxus 🇮🇳</p>
       </div>
     ),
   },
@@ -89,17 +89,17 @@ export default function SettingsPage() {
       <div className="space-y-4">
         {sections.map(({ id, title, description, icon: Icon, content }) => (
           <Card key={id} className="border-border/60 shadow-sm">
-            <CardHeader className="pb-3">
+            <div className="px-6 pt-4 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
                   <Icon className="h-4 w-4 text-accent-foreground" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-foreground">{title}</p>
-                  <p className="text-xs text-muted-foreground">{description}</p>
+                  <p className="text-xs text-foreground/60">{description}</p>
                 </div>
               </div>
-            </CardHeader>
+            </div>
             <CardContent>{content}</CardContent>
           </Card>
         ))}

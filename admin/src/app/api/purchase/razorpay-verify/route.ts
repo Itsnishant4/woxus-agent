@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     hardwareIds: hardwareId ? [hardwareId] : [],
     expiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
     features: ["all"],
-    maxActivations: 3,
+    maxActivations: 1,
   });
 
   await Purchase.findOneAndUpdate(

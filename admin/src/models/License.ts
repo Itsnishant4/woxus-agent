@@ -23,7 +23,7 @@ const LicenseSchema = new Schema<ILicense>(
     features: [{ type: String }],
     revoked: { type: Boolean, default: false },
     revokedAt: { type: Date },
-    maxActivations: { type: Number, default: 3 },
+    maxActivations: { type: Number, default: 1 },
     activationCount: { type: Number, default: 0 },
   },
   { timestamps: true }

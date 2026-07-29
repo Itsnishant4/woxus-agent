@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const expiryDays = body.expiryDays ?? 365;
   const features = body.features ?? ["all"];
-  const maxActivations = body.maxActivations ?? 3;
+  const maxActivations = body.maxActivations ?? 1;
 
   const key = generateKey();
   const expiry = expiryDays > 0

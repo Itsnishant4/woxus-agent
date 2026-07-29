@@ -52,6 +52,7 @@ def generate_key(expiry_days: int = 365, features: Optional[list[str]] = None) -
         "expiry": (datetime.utcnow() + timedelta(days=expiry_days)).isoformat(),
         "features": features or ["all"],
         "hardware_ids": [],
+        "max_activations": 1,
         "revoked": False,
         "created_at": datetime.utcnow().isoformat(),
     }
@@ -70,8 +71,12 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
             return {"valid": False, "reason": "License revoked"}
         if lic["expiry"] and datetime.fromisoformat(lic["expiry"]) < datetime.utcnow():
             return {"valid": False, "reason": "License expired"}
-        if hardware_id not in lic.get("hardware_ids", []):
-            lic.setdefault("hardware_ids", []).append(hardware_id)
+        hw_ids = lic.get("hardware_ids", [])
+        max_act = lic.get("max_activations", 1)
+        if hardware_id not in hw_ids and len(hw_ids) >= max_act:
+            return {"valid": False, "reason": "License already activated on another device"}
+        if hardware_id not in hw_ids:
+            hw_ids.append(hardware_id)
             _save_licenses(licenses)
         return {
             "valid": True,
@@ -90,6 +95,10 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
                 if doc.get("expiry") and doc["expiry"] < datetime.utcnow():
                     return {"valid": False, "reason": "License expired"}
                 hw_ids = doc.get("hardwareIds") or []
+                max_act = doc.get("maxActivations", 1)
+                act_count = doc.get("activationCount", 0)
+                if hardware_id not in hw_ids and act_count >= max_act:
+                    return {"valid": False, "reason": "License already activated on another device"}
                 if hardware_id not in hw_ids:
                     col.update_one(
                         {"_id": doc["_id"]},

@@ -148,7 +148,6 @@ function BuyPage() {
               ? "This key is already bound to your device. Return to the Woxus app."
               : "Copy this key and enter it in the Woxus desktop app to activate your license."}
           </p>
-          <a href="/login" className="inline-block mt-2 text-sm text-violet-400 hover:text-violet-300">Go to Admin Panel &rarr;</a>
         </div>
       </div>
     );

@@ -11,7 +11,7 @@ function iconPath(...segments: string[]): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'icons', ...segments);
   }
-  return join(__dirname, '..', '..', '..', ...(VITE_DEV_SERVER_URL ? ['dev-icons', ...segments] : ['icons', ...segments]));
+  return join(__dirname, '..', '..', ...(VITE_DEV_SERVER_URL ? ['dev-icons', ...segments] : ['icons', ...segments]));
 }
 
 let mainWindow: BrowserWindow | null = null;

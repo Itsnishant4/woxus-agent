@@ -7,11 +7,19 @@ const __dirname = dirname(__filename);
 
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
 
+function iconPath(...segments: string[]): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, 'icons', ...segments);
+  }
+  return join(__dirname, '..', '..', '..', ...(VITE_DEV_SERVER_URL ? ['dev-icons', ...segments] : ['icons', ...segments]));
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
 function createWindow() {
+  const iconFile = process.platform === 'darwin' ? 'icon.png' : 'windows/icon.ico';
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -19,6 +27,7 @@ function createWindow() {
     minHeight: 600,
     show: false,
     title: 'Woxus',
+    icon: iconPath(iconFile),
     backgroundColor: '#09090b',
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
@@ -66,7 +75,12 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createEmpty();
+  const trayIconFile = process.platform === 'darwin' ? 'tray-icon.png' : 'tray-icon-32.png';
+  let icon = nativeImage.createFromPath(iconPath(trayIconFile));
+  if (process.platform === 'darwin') {
+    icon = icon.resize({ width: 22, height: 22 });
+    icon.setTemplateImage(true);
+  }
   tray = new Tray(icon);
   tray.setToolTip('Woxus Agent');
 

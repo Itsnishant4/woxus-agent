@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, Switch, Separator } from '@heroui/react';
+import { Card, CardContent, CardHeader, Switch, Separator } from '@heroui/react';
 import { Key, Palette, Bell, Shield, Info } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -95,8 +95,8 @@ export default function SettingsPage() {
                   <Icon className="h-4 w-4 text-accent-foreground" />
                 </div>
                 <div>
-                  <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                  <CardDescription className="text-xs">{description}</CardDescription>
+                  <p className="text-sm font-medium text-foreground">{title}</p>
+                  <p className="text-xs text-muted-foreground">{description}</p>
                 </div>
               </div>
             </CardHeader>

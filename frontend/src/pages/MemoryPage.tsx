@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@heroui/react';
 import { Brain, Search, Trash2, Star } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface Memory {
   id: string;
@@ -27,7 +28,7 @@ export default function MemoryPage() {
       const data = await res.json();
       setMemories(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error('Failed to fetch memories', e);
+      toast.error('Failed to fetch memories');
     } finally {
       setLoading(false);
     }

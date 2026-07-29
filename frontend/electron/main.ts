@@ -1,9 +1,13 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { BackendManager } from './backendManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const rootPath = join(__dirname, '../../');
+const backendManager = new BackendManager(rootPath);
 
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
 
@@ -57,7 +61,9 @@ function createWindow() {
   });
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show();
+    if (!process.argv.includes('--hidden')) {
+      mainWindow?.show();
+    }
   });
 
   mainWindow.on('close', (event) => {
@@ -93,10 +99,18 @@ function createTray() {
   tray.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(nativeImage.createFromPath(iconPath('icon-transparent.png')));
   }
+  
+  try {
+    console.log('[Electron] Waiting for backend to start...');
+    await backendManager.start();
+  } catch (err) {
+    console.error('[Electron] Failed to start backend:', err);
+  }
+
   createWindow();
   createTray();
 
@@ -110,6 +124,20 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => { isQuitting = true; });
+app.on('before-quit', () => { 
+  isQuitting = true;
+  backendManager.stop();
+});
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('get-auto-launch', () => {
+  return app.getLoginItemSettings().openAtLogin;
+});
+
+ipcMain.handle('set-auto-launch', (event, enable) => {
+  app.setLoginItemSettings({
+    openAtLogin: enable,
+    args: enable ? ['--hidden'] : [],
+  });
+});

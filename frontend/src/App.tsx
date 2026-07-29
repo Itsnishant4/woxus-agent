@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Settings, Brain, FileText, Key,
-  Mic, PanelLeft, Zap, ListChecks,
+  Settings, Brain, Key,
+  PanelLeft, Zap, ListChecks, Keyboard, Mic,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
 import HomePage from '@pages/HomePage';
@@ -10,7 +10,9 @@ import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
+import Toaster from '@components/Toast';
 import { getHardwareId } from '@/lib/hardware';
+import { useTheme } from '@/hooks/useTheme';
 
 const API = 'http://127.0.0.1:8000/api';
 
@@ -19,7 +21,6 @@ type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
 const navItems = [
   { to: '/', icon: Zap, label: 'Home' },
   { to: '/tasks', icon: ListChecks, label: 'Tasks' },
-  { to: '/notes', icon: FileText, label: 'Notes' },
   { to: '/memory', icon: Brain, label: 'Memory' },
   { to: '/license', icon: Key, label: 'License' },
   { to: '/settings', icon: Settings, label: 'Settings' },
@@ -108,6 +109,7 @@ function CmdPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
 }
 
 export default function App() {
+  useTheme();
   const [appStatus, setAppStatus] = useState<AppStatus>('loading');
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');
@@ -181,6 +183,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto">
           <LicensePage onActivated={checkLicense} />
         </main>
+        <Toaster />
       </div>
     );
   }
@@ -266,9 +269,15 @@ export default function App() {
             {navItems.find((n) => n.to === location.pathname)?.label || 'Woxus'}
           </h1>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" isIconOnly size="sm" className="text-muted-foreground" onClick={() => setCmdOpen(true)}>
-              <Mic className="h-4 w-4" />
-            </Button>
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 border border-border/60 transition-all"
+            >
+              <Keyboard className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline font-medium">
+                {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
+              </span>
+            </button>
           </div>
         </header>
 
@@ -286,6 +295,7 @@ export default function App() {
 
       {/* Command Palette */}
       <CmdPalette open={cmdOpen} onOpenChange={setCmdOpen} />
+      <Toaster />
     </div>
   );
 }

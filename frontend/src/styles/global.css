@@ -60,22 +60,11 @@
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  display: none;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-muted-foreground);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted-foreground);
-  opacity: 0.8;
+* {
+  scrollbar-width: none;
 }
 
 input:focus-visible {

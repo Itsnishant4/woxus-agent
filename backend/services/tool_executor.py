@@ -10,7 +10,7 @@ import logging
 import os
 from typing import Any, Optional
 
-from .memory_engine import create_memory, search_memories, list_memories, delete_memory as delete_memory_svc
+from .memory_engine import create_memory, list_memories, delete_memory as delete_memory_svc
 from .file_writer import write_file as write_file_svc, read_text_file
 from .task_manager import get_task_manager
 
@@ -62,8 +62,6 @@ async def handle_tool_call(name: str, args: dict) -> dict:
             return _list_dir(args)
         elif name == "memory_create":
             return await _memory_create(args)
-        elif name == "memory_search":
-            return _memory_search(args)
         elif name == "memory_list":
             return _memory_list(args)
         elif name == "memory_delete":

@@ -7,7 +7,7 @@ from ..services.license import verify_key
 
 logger = logging.getLogger(__name__)
 
-SKIP_PATHS = {"/api/system/health", "/api/system/status", "/api/license/verify", "/api/trial/start", "/api/trial/status", "/api/tasks", "/api/memory", "/docs", "/openapi.json"}
+SKIP_PATHS = {"/api/system/health", "/api/system/status", "/api/license/verify", "/api/trial/start", "/api/trial/status", "/api/tasks", "/api/memory", "/api/feedback", "/docs", "/openapi.json"}
 
 
 async def license_check_middleware(request: Request, call_next):

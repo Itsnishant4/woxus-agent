@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Separator } from "@heroui/react";
 import { Key, Clock, ExternalLink, Star, Send, AlertCircle, CheckCircle } from "lucide-react";
 import { getHardwareId } from "@/lib/hardware";
+import { toast } from "@/components/Toast";
 
 const API = "http://127.0.0.1:8000/api";
 const BUY_URL = import.meta.env.VITE_BUY_URL || "http://localhost:3000/buy";
@@ -25,10 +26,11 @@ const [trialSec, setTrialSec] = useState(0);
 const [trialTotal, setTrialTotal] = useState(600);
 const [startingTrial, setStartingTrial] = useState(false);
 const [trialEmail, setTrialEmail] = useState("");
+const [trialExpired, setTrialExpired] = useState(false);
 
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
-  const [feedbackSent, setFeedbackSent] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(() => !!localStorage.getItem("woxus_feedback_submitted"));
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -62,6 +64,8 @@ const [trialEmail, setTrialEmail] = useState("");
         setTrialEmail(data.email || "");
         setState("trial");
         return;
+      } else {
+        setTrialExpired(true);
       }
     } catch {
       /* offline */
@@ -83,6 +87,8 @@ const [trialEmail, setTrialEmail] = useState("");
           setTrialSec(data.remaining_seconds);
           if (!data.active) {
             setState("unlicensed");
+            setTrialExpired(true);
+            toast("Your free trial has ended. Purchase a license to continue.", "info");
             if (intervalRef.current) clearInterval(intervalRef.current);
           }
         } catch {
@@ -146,15 +152,16 @@ const [trialEmail, setTrialEmail] = useState("");
   const handleSubmitFeedback = async () => {
     if (feedbackRating === 0) return;
     setFeedbackSubmitting(true);
+    localStorage.setItem("woxus_feedback_submitted", "1");
+    setFeedbackSent(true);
     try {
       await fetch(`${API}/feedback/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating: feedbackRating, text: feedbackText, hardware_id: hwid }),
       });
-      setFeedbackSent(true);
     } catch {
-      /* ignore */
+      /* ignore - card already hidden */
     }
     setFeedbackSubmitting(false);
   };
@@ -218,6 +225,7 @@ const [trialEmail, setTrialEmail] = useState("");
       <Separator />
 
       {/* Trial section */}
+      {!trialExpired && (
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -276,6 +284,7 @@ const [trialEmail, setTrialEmail] = useState("");
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* License entry */}
       <Card className="border-border/60 shadow-sm">
@@ -332,6 +341,7 @@ const [trialEmail, setTrialEmail] = useState("");
       </Card>
 
       {/* Feedback */}
+      {!feedbackSent && (
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -345,12 +355,6 @@ const [trialEmail, setTrialEmail] = useState("");
           </div>
         </CardHeader>
         <CardContent>
-          {feedbackSent ? (
-            <div className="flex items-center gap-2 text-sm text-green-500">
-              <CheckCircle className="h-4 w-4" />
-              <span>Thanks for your feedback!</span>
-            </div>
-          ) : (
             <div className="space-y-3">
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -381,9 +385,9 @@ const [trialEmail, setTrialEmail] = useState("");
                 {feedbackSubmitting ? "Sending..." : "Send"}
               </button>
             </div>
-          )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

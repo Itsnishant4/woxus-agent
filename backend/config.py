@@ -6,12 +6,12 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
 
+if ENV_FILE.exists():
+    load_dotenv(ENV_FILE)
+
 
 @lru_cache()
 def load_config() -> dict[str, str]:
-    if ENV_FILE.exists():
-        load_dotenv(ENV_FILE)
-
     return {
         "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
         "GEMINI_MODEL": os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),

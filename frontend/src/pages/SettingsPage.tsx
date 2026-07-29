@@ -1,5 +1,25 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, Label, Switch, Separator } from '@heroui/react';
+import { Card, CardContent, Switch, Separator } from '@heroui/react';
 import { Key, Palette, Bell, Shield, Info } from 'lucide-react';
+import { useTheme } from '@/hooks/useTheme';
+
+function AppearanceSection() {
+  const { dark, toggle } = useTheme();
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <label htmlFor="dark-mode" className="text-sm font-medium text-foreground">Dark mode</label>
+        <p className="text-xs text-muted-foreground">Toggle between light and dark theme</p>
+      </div>
+      <Switch isSelected={dark} onChange={toggle}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch.Content>
+      </Switch>
+    </div>
+  );
+}
 
 const sections = [
   {
@@ -14,21 +34,7 @@ const sections = [
     title: 'Appearance',
     description: 'Customize how Woxus looks',
     icon: Palette,
-    content: (
-      <div className="flex items-center justify-between">
-        <div>
-          <Label htmlFor="dark-mode" className="text-sm font-normal">Dark mode</Label>
-          <p className="text-xs text-muted-foreground">Toggle between light and dark theme</p>
-        </div>
-        <Switch defaultSelected>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-          </Switch.Content>
-        </Switch>
-      </div>
-    ),
+    content: <AppearanceSection />,
   },
   {
     id: 'notifications',
@@ -38,7 +44,7 @@ const sections = [
     content: (
       <div className="flex items-center justify-between">
         <div>
-          <Label htmlFor="notif" className="text-sm font-normal">Enable notifications</Label>
+          <label htmlFor="notif" className="text-sm font-medium text-foreground">Enable notifications</label>
           <p className="text-xs text-muted-foreground">Receive alerts from Woxus</p>
         </div>
         <Switch>
@@ -66,7 +72,7 @@ const sections = [
     content: (
       <div className="space-y-1 text-sm text-muted-foreground">
         <p>Woxus v0.1.0</p>
-        <p>Built with Electron + React + Tailwind v4</p>
+        <p>Built with love 🧡 Team Woxus 🇮🇳</p>
       </div>
     ),
   },
@@ -74,7 +80,7 @@ const sections = [
 
 export default function SettingsPage() {
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
+    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8 h-full overflow-y-auto">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">Configure your Woxus agent</p>
@@ -83,17 +89,17 @@ export default function SettingsPage() {
       <div className="space-y-4">
         {sections.map(({ id, title, description, icon: Icon, content }) => (
           <Card key={id} className="border-border/60 shadow-sm">
-            <CardHeader className="pb-3">
+            <div className="px-6 pt-4 pb-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
                   <Icon className="h-4 w-4 text-accent-foreground" />
                 </div>
                 <div>
-                  <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                  <CardDescription className="text-xs">{description}</CardDescription>
+                  <p className="text-sm font-medium text-foreground">{title}</p>
+                  <p className="text-xs text-foreground/60">{description}</p>
                 </div>
               </div>
-            </CardHeader>
+            </div>
             <CardContent>{content}</CardContent>
           </Card>
         ))}

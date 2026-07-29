@@ -148,26 +148,6 @@ memory_create_declaration = types.FunctionDeclaration(
     ),
 )
 
-memory_search_declaration = types.FunctionDeclaration(
-    name="memory_search",
-    description="Search stored memories by text query. Returns matching memories sorted by relevance.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "query": types.Schema(
-                type=types.Type.STRING,
-                description="Search query text",
-            ),
-            "limit": types.Schema(
-                type=types.Type.INTEGER,
-                description="Max results to return. Default 10.",
-                default=10,
-            ),
-        },
-        required=["query"],
-    ),
-)
-
 memory_list_declaration = types.FunctionDeclaration(
     name="memory_list",
     description="List all stored memories, sorted by importance (highest first).",
@@ -218,7 +198,6 @@ agent_tools = [
         read_file_declaration,
         list_dir_declaration,
         memory_create_declaration,
-        memory_search_declaration,
         memory_list_declaration,
         memory_delete_declaration,
     ]),

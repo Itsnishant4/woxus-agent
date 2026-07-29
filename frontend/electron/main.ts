@@ -19,7 +19,7 @@ let tray: Tray | null = null;
 let isQuitting = false;
 
 function createWindow() {
-  const iconFile = process.platform === 'darwin' ? 'icon.png' : 'windows/icon.ico';
+  const iconFile = process.platform === 'darwin' ? 'icon-transparent.png' : 'windows/icon.ico';
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -94,6 +94,9 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    app.dock?.setIcon(nativeImage.createFromPath(iconPath('icon-transparent.png')));
+  }
   createWindow();
   createTray();
 

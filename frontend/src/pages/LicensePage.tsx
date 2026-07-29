@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Separator } from "@heroui/react";
-import { Key, Clock, ExternalLink, Star, Send, AlertCircle, CheckCircle } from "lucide-react";
+import { Key, Clock, ExternalLink, Star, Send, AlertCircle, CheckCircle, MessageCircle } from "lucide-react";
 import { getHardwareId } from "@/lib/hardware";
 import { toast } from "@/components/Toast";
 
@@ -321,9 +321,22 @@ const [trialExpired, setTrialExpired] = useState(false);
               </button>
             </div>
             {licenseError && (
-              <div className="flex items-center gap-1.5 text-xs text-red-500">
-                <AlertCircle className="h-3 w-3" />
-                <span>{licenseError}</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-xs text-red-500">
+                  <AlertCircle className="h-3 w-3" />
+                  <span>{licenseError}</span>
+                </div>
+                {(licenseError.includes("revoked") || licenseError.includes("expired")) && (
+                  <a
+                    href="https://wa.me/919773005701"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-green-500 hover:text-green-400 transition-colors"
+                  >
+                    <MessageCircle className="h-3 w-3" />
+                    Contact Admin on WhatsApp
+                  </a>
+                )}
               </div>
             )}
             <div className="text-center">

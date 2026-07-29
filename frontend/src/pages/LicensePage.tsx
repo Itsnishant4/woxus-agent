@@ -31,7 +31,6 @@ const [trialExpired, setTrialExpired] = useState(false);
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(() => !!localStorage.getItem("woxus_feedback_submitted"));
-  const [feedbackError, setFeedbackError] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -153,22 +152,16 @@ const [trialExpired, setTrialExpired] = useState(false);
   const handleSubmitFeedback = async () => {
     if (feedbackRating === 0) return;
     setFeedbackSubmitting(true);
+    localStorage.setItem("woxus_feedback_submitted", "1");
+    setFeedbackSent(true);
     try {
-      const res = await fetch(`${API}/feedback/`, {
+      await fetch(`${API}/feedback/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating: feedbackRating, text: feedbackText, hardware_id: hwid }),
       });
-      const data = await res.json();
-      if (data.status === "already_submitted") {
-        localStorage.setItem("woxus_feedback_submitted", "1");
-        setFeedbackError("You already submitted feedback.");
-      } else {
-        localStorage.setItem("woxus_feedback_submitted", "1");
-        setFeedbackSent(true);
-      }
     } catch {
-      /* ignore */
+      /* ignore - card already hidden */
     }
     setFeedbackSubmitting(false);
   };
@@ -348,7 +341,7 @@ const [trialExpired, setTrialExpired] = useState(false);
       </Card>
 
       {/* Feedback */}
-      {!feedbackSent && !feedbackError && (
+      {!feedbackSent && (
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -362,17 +355,6 @@ const [trialExpired, setTrialExpired] = useState(false);
           </div>
         </CardHeader>
         <CardContent>
-          {feedbackSent ? (
-            <div className="flex items-center gap-2 text-sm text-green-500">
-              <CheckCircle className="h-4 w-4" />
-              <span>Thanks for your feedback!</span>
-            </div>
-          ) : feedbackError ? (
-            <div className="flex items-center gap-2 text-sm text-amber-500">
-              <AlertCircle className="h-4 w-4" />
-              <span>{feedbackError}</span>
-            </div>
-          ) : (
             <div className="space-y-3">
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
@@ -403,7 +385,6 @@ const [trialExpired, setTrialExpired] = useState(false);
                 {feedbackSubmitting ? "Sending..." : "Send"}
               </button>
             </div>
-          )}
         </CardContent>
       </Card>
       )}

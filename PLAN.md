@@ -300,12 +300,12 @@ woxus/
 - AI prompt generation + typing into target app
 - Support for: ChatGPT desktop, Claude, opencode, browser chat apps
 
-### Phase 6 — Terminal + File Writer
-- Terminal page with real-time output streaming
-- Command execution with retry + safety confirmations
-- File writer UI with AI-assisted generation
-- Template system
-- Native file picker integration
+### Phase 6 — NotesPage (Write + Open in OS)
+- Text editor UI with save-to-file
+- "Open in App" button → opens file in default OS app (notepad/TextEdit)
+- Backend endpoints: `POST /api/notes/write`, `POST /api/notes/open`
+- File history list in UI
+- Note: Terminal not needed — agent already runs commands via tool_executor
 
 ### Phase 7 — Admin Panel (Next.js)
 - Authentication (password or OAuth)
@@ -370,7 +370,7 @@ woxus/
 | 3. Electron App | 2 weeks | Tray, white theme UI, all pages |
 | 4. License + Trial | 1 week | Key system, 10-min trial, device fingerprint |
 | 5. Prompt Writer | 2 weeks | nut.js automation, overlay, AI prompt gen |
-| 6. Terminal + Files | 1 week | Terminal with retry, file writer |
+| 6. NotesPage | 1 week | Write-to-file + open-in-OS text editor |
 | 7. Admin Panel | 2 weeks | Next.js, user mgmt, keys, payments, logs |
 | 8. Packaging | 2 weeks | Builds, signing, auto-update, installers |
 
@@ -385,5 +385,8 @@ woxus/
 3. [x] Build admin/ directory with Next.js
 4. [x] CI/CD — GitHub Actions for Mac + Windows + backend
 5. [ ] Add system tray + background service (Phase 3)
-6. [ ] Implement license gate (Phase 4)
+6. [x] Implement license gate (Phase 4)
 7. [x] Backend endpoint implementation (Phase 2)
+8. [ ] NotesPage — write to file + open in OS default app (Phase 6)
+9. [ ] Prompt Writer Agent (Phase 5)
+10. [ ] Packaging & Distribution (Phase 8)

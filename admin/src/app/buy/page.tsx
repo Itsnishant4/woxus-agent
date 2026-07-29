@@ -39,6 +39,7 @@ function BuyPage() {
   const [step, setStep] = useState<"loading" | "plans" | "form" | "processing" | "done">("loading");
   const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setHardwareId(urlHardwareId);
@@ -133,7 +134,15 @@ function BuyPage() {
           </div>
           <h1 className="text-xl font-semibold text-white">Purchase Successful!</h1>
           <p className="text-sm text-zinc-400">Your license key:</p>
-          <code className="block text-lg font-mono bg-zinc-800 px-4 py-3 rounded-lg text-violet-400 select-all">{licenseKey}</code>
+          <div className="flex items-center gap-2 bg-zinc-800 px-4 py-3 rounded-lg">
+            <code className="flex-1 text-lg font-mono text-violet-400 select-all text-center">{licenseKey}</code>
+            <button
+              onClick={() => { navigator.clipboard.writeText(licenseKey); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+              className="shrink-0 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-300 transition-all"
+            >
+              {copied ? "Copied!" : "Copy"}
+            </button>
+          </div>
           <p className="text-xs text-zinc-500">
             {hardwareFromApp
               ? "This key is already bound to your device. Return to the Woxus app."

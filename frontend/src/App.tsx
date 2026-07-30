@@ -12,10 +12,7 @@ import OverlayPage from '@pages/OverlayPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
 import Toaster from '@components/Toast';
-import { getHardwareId } from '@/lib/hardware';
 import { useTheme } from '@/hooks/useTheme';
-
-const API = 'http://127.0.0.1:8000/api';
 
 type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
 
@@ -117,36 +114,24 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const hwid = getHardwareId();
 
   const checkLicense = useCallback(async () => {
-    const cached = localStorage.getItem('woxus_license_key');
-    if (cached) {
-      try {
-        const res = await fetch(`${API}/license/verify`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ license_key: cached, hardware_id: hwid }),
-        });
-        const data = await res.json();
-        if (data.valid) {
-          setAppStatus('licensed');
-          return;
-        }
-      } catch { /* offline */ }
+    // @ts-ignore
+    const result = await window.electronAPI?.getLicenseStatus?.();
+    if (!result) { setAppStatus('unlicensed'); return; }
+
+    if (result.status === 'licensed') {
+      setAppStatus('licensed');
+      return;
     }
 
-    try {
-      const res = await fetch(`${API}/trial/status?hardware_id=${hwid}`);
-      const data = await res.json();
-      if (data.active) {
-        setAppStatus('trial');
-        return;
-      }
-    } catch { /* offline */ }
+    if (result.status === 'trial') {
+      setAppStatus('trial');
+      return;
+    }
 
     setAppStatus('unlicensed');
-  }, [hwid]);
+  }, []);
 
   useEffect(() => {
     checkLicense();

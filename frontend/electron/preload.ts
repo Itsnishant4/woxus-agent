@@ -8,4 +8,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setGlobalHotkey: (hotkey: string) => ipcRenderer.invoke('set-global-hotkey', hotkey),
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
   platform: process.platform,
+
+  // License IPC
+  getHardwareId: () => ipcRenderer.invoke('hardware:get-id'),
+  verifyLicense: (licenseKey: string) => ipcRenderer.invoke('license:verify', licenseKey),
+  getLicenseStatus: () => ipcRenderer.invoke('license:get-status'),
+  getTrialStatus: () => ipcRenderer.invoke('trial:status'),
+  startTrial: (email: string) => ipcRenderer.invoke('trial:start', email),
+  submitFeedback: (rating: number, text: string) => ipcRenderer.invoke('feedback:submit', rating, text),
 });

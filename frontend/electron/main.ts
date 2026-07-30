@@ -2,6 +2,8 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShor
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
+import { BackendManager } from './backendManager.js';
+import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -137,16 +139,33 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('Woxus Agent');
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show Woxus', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
-  ]);
-  tray.setContextMenu(contextMenu);
-  tray.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
+  function updateMenu() {
+    // In dev mode, assume backend is running (dev.js manages it)
+    const state = app.isPackaged
+      ? BackendManager.getInstance().getState()
+      : { isRunning: true };
+    const contextMenu = Menu.buildFromTemplate([
+      { label: 'Show Woxus', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+      { type: 'separator' },
+      { label: state.isRunning ? 'Backend: Running' : 'Backend: Stopped', enabled: false },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
+    ]);
+    tray?.setContextMenu(contextMenu);
+  }
+
+  updateMenu();
+  // Don't auto-show window on tray click — user opens via context menu
+  // Clicking the tray icon only reveals the context menu (macOS default)
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Single instance lock (reference: prompt-enhancer/main.ts)
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    return;
+  }
+
   // Apply persisted auto-launch setting on every startup (reference: prompt-enhancer/main.ts)
   const savedLaunch = settingsStore.getLaunchAtLogin();
   if (savedLaunch) {
@@ -159,9 +178,20 @@ app.whenReady().then(() => {
     app.setLoginItemSettings({ openAtLogin: false });
   }
 
+  // Start backend manager for packaged builds
+  const backendManager = BackendManager.getInstance();
+  if (app.isPackaged) {
+    try {
+      await backendManager.start();
+    } catch (err) {
+      console.error('[main] Failed to start backend:', err);
+    }
+  }
+
   if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(nativeImage.createFromPath(iconPath('icon-transparent.png')));
   }
+
   createWindow();
   createOverlayWindow();
   createTray();
@@ -177,7 +207,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => { isQuitting = true; });
+// Second instance handler (reference: prompt-enhancer/main.ts)
+app.on('second-instance', () => {
+  mainWindow?.show();
+  mainWindow?.focus();
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+  // Stop backend on quit (packaged mode only)
+  if (app.isPackaged) {
+    BackendManager.getInstance().stop();
+  }
+});
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
@@ -209,3 +251,16 @@ ipcMain.handle('set-global-hotkey', (_event, hotkey: string) => {
 ipcMain.on('hide-overlay', () => {
   overlayWindow?.hide();
 });
+
+// License IPC handlers
+ipcMain.handle('hardware:get-id', () => getHardwareId());
+
+ipcMain.handle('license:verify', (_event, licenseKey: string) => verifyLicense(licenseKey));
+
+ipcMain.handle('license:get-status', () => getLicenseStatus());
+
+ipcMain.handle('trial:status', () => getTrialStatus());
+
+ipcMain.handle('trial:start', (_event, email: string) => startTrial(email));
+
+ipcMain.handle('feedback:submit', (_event, rating: number, text: string) => submitFeedback(rating, text));

@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { Mic, Search, Loader2, Square } from 'lucide-react';
-import { getHardwareId } from '@/lib/hardware';
-
 const API = 'http://127.0.0.1:8000/api';
 
 export default function OverlayPage() {
@@ -60,7 +58,7 @@ export default function OverlayPage() {
     setClarification(null);
     try {
       const licenseKey = localStorage.getItem('woxus_license_key') || '';
-      const hwid = getHardwareId();
+      const hwid = await (window as any).electronAPI?.getHardwareId?.() || 'unknown';
 
       const res = await fetch(`${API}/overlay/clarify`, {
         method: 'POST',

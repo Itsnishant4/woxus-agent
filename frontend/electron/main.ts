@@ -57,7 +57,9 @@ function createWindow() {
   });
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow?.show();
+    if (!process.argv.includes('--hidden')) {
+      mainWindow?.show();
+    }
   });
 
   mainWindow.on('close', (event) => {
@@ -113,3 +115,14 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => { isQuitting = true; });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('get-auto-launch', () => {
+  return app.getLoginItemSettings().openAtLogin;
+});
+
+ipcMain.handle('set-auto-launch', (_event, enable: boolean) => {
+  app.setLoginItemSettings({
+    openAtLogin: enable,
+    args: enable ? ['--hidden'] : [],
+  });
+});

@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, Switch, Separator } from '@heroui/react';
-import { Palette, Bell, Shield, Info } from 'lucide-react';
+import { Palette, Bell, Shield, Info, Monitor } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
 function AppearanceSection() {
@@ -21,7 +22,52 @@ function AppearanceSection() {
   );
 }
 
+function SystemSection() {
+  const [autoLaunch, setAutoLaunch] = useState(false);
+
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electronAPI?.getAutoLaunch) {
+      // @ts-ignore
+      window.electronAPI.getAutoLaunch().then(setAutoLaunch);
+    }
+  }, []);
+
+  const toggleAutoLaunch = async () => {
+    const next = !autoLaunch;
+    setAutoLaunch(next);
+    // @ts-ignore
+    if (window.electronAPI?.setAutoLaunch) {
+      // @ts-ignore
+      await window.electronAPI.setAutoLaunch(next);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <label htmlFor="auto-launch" className="text-sm font-medium text-foreground">Launch on startup</label>
+        <p className="text-xs text-muted-foreground">Auto-start Woxus when you log in</p>
+      </div>
+      <Switch isSelected={autoLaunch} onChange={toggleAutoLaunch}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+        </Switch.Content>
+      </Switch>
+    </div>
+  );
+}
+
 const sections = [
+  {
+    id: 'system',
+    title: 'System',
+    description: 'System-level integration settings',
+    icon: Monitor,
+    content: <SystemSection />,
+  },
   {
     id: 'appearance',
     title: 'Appearance',

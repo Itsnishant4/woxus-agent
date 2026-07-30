@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'ele
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
+import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -146,3 +147,16 @@ ipcMain.handle('set-auto-launch', (_event, enable: boolean) => {
   }
   return settingsStore.getLaunchAtLogin();
 });
+
+// License IPC handlers
+ipcMain.handle('hardware:get-id', () => getHardwareId());
+
+ipcMain.handle('license:verify', (_event, licenseKey: string) => verifyLicense(licenseKey));
+
+ipcMain.handle('license:get-status', () => getLicenseStatus());
+
+ipcMain.handle('trial:status', () => getTrialStatus());
+
+ipcMain.handle('trial:start', (_event, email: string) => startTrial(email));
+
+ipcMain.handle('feedback:submit', (_event, rating: number, text: string) => submitFeedback(rating, text));

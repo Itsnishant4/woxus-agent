@@ -91,7 +91,10 @@ function createTray() {
   tray.setToolTip('Woxus Agent');
 
   function updateMenu() {
-    const state = app.isPackaged ? BackendManager.getInstance().getState() : { isRunning: false };
+    // In dev mode, assume backend is running (dev.js manages it)
+    const state = app.isPackaged
+      ? BackendManager.getInstance().getState()
+      : { isRunning: true };
     const contextMenu = Menu.buildFromTemplate([
       { label: 'Show Woxus', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
       { type: 'separator' },
@@ -103,7 +106,8 @@ function createTray() {
   }
 
   updateMenu();
-  tray.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
+  // Don't auto-show window on tray click — user opens via context menu
+  // Clicking the tray icon only reveals the context menu (macOS default)
 }
 
 app.whenReady().then(async () => {

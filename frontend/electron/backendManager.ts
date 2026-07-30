@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { app } from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -87,5 +88,3 @@ export class BackendManager {
     return { ...this.state };
   }
 }
-
-import { app } from 'electron';

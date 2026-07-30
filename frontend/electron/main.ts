@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'ele
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
+import { BackendManager } from './backendManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -89,16 +90,29 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('Woxus Agent');
 
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show Woxus', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
-  ]);
-  tray.setContextMenu(contextMenu);
+  function updateMenu() {
+    const state = app.isPackaged ? BackendManager.getInstance().getState() : { isRunning: false };
+    const contextMenu = Menu.buildFromTemplate([
+      { label: 'Show Woxus', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+      { type: 'separator' },
+      { label: state.isRunning ? 'Backend: Running' : 'Backend: Stopped', enabled: false },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { isQuitting = true; app.quit(); } },
+    ]);
+    tray?.setContextMenu(contextMenu);
+  }
+
+  updateMenu();
   tray.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Single instance lock (reference: prompt-enhancer/main.ts)
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+    return;
+  }
+
   // Apply persisted auto-launch setting on every startup (reference: prompt-enhancer/main.ts)
   const savedLaunch = settingsStore.getLaunchAtLogin();
   if (savedLaunch) {
@@ -111,9 +125,20 @@ app.whenReady().then(() => {
     app.setLoginItemSettings({ openAtLogin: false });
   }
 
+  // Start backend manager for packaged builds
+  const backendManager = BackendManager.getInstance();
+  if (app.isPackaged) {
+    try {
+      await backendManager.start();
+    } catch (err) {
+      console.error('[main] Failed to start backend:', err);
+    }
+  }
+
   if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(nativeImage.createFromPath(iconPath('icon-transparent.png')));
   }
+
   createWindow();
   createTray();
 
@@ -127,7 +152,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => { isQuitting = true; });
+// Second instance handler (reference: prompt-enhancer/main.ts)
+app.on('second-instance', () => {
+  mainWindow?.show();
+  mainWindow?.focus();
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+  // Stop backend on quit (packaged mode only)
+  if (app.isPackaged) {
+    BackendManager.getInstance().stop();
+  }
+});
 
 ipcMain.handle('get-app-version', () => app.getVersion());
 

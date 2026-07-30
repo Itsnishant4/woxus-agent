@@ -57,7 +57,8 @@ function createWindow() {
   });
 
   mainWindow.on('ready-to-show', () => {
-    if (!process.argv.includes('--hidden')) {
+    const launchedAtLogin = process.platform === 'darwin' && app.getLoginItemSettings().wasLaunchedAtLogin;
+    if (!process.argv.includes('--hidden') && !launchedAtLogin) {
       mainWindow?.show();
     }
   });
@@ -121,8 +122,11 @@ ipcMain.handle('get-auto-launch', () => {
 });
 
 ipcMain.handle('set-auto-launch', (_event, enable: boolean) => {
-  app.setLoginItemSettings({
-    openAtLogin: enable,
-    args: enable ? ['--hidden'] : [],
-  });
+  if (enable && process.platform === 'darwin') {
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+  } else if (enable) {
+    app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+  } else {
+    app.setLoginItemSettings({ openAtLogin: false });
+  }
 });

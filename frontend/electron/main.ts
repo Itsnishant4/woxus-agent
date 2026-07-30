@@ -1,7 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { settingsStore } from './store';
+import { settingsStore } from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

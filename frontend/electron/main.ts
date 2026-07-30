@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { settingsStore } from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -57,7 +58,9 @@ function createWindow() {
   });
 
   mainWindow.on('ready-to-show', () => {
-    if (!process.argv.includes('--hidden')) {
+    const settings = app.getLoginItemSettings() as any;
+    const launchedAtLogin = process.platform === 'darwin' && !!settings?.wasLaunchedAtLogin;
+    if (!process.argv.includes('--hidden') && !launchedAtLogin) {
       mainWindow?.show();
     }
   });
@@ -96,6 +99,18 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  // Apply persisted auto-launch setting on every startup (reference: prompt-enhancer/main.ts)
+  const savedLaunch = settingsStore.getLaunchAtLogin();
+  if (savedLaunch) {
+    if (process.platform === 'darwin') {
+      app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+    } else {
+      app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+    }
+  } else {
+    app.setLoginItemSettings({ openAtLogin: false });
+  }
+
   if (process.platform === 'darwin' && !app.isPackaged) {
     app.dock?.setIcon(nativeImage.createFromPath(iconPath('icon-transparent.png')));
   }
@@ -117,12 +132,17 @@ app.on('before-quit', () => { isQuitting = true; });
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('get-auto-launch', () => {
-  return app.getLoginItemSettings().openAtLogin;
+  return settingsStore.getLaunchAtLogin();
 });
 
 ipcMain.handle('set-auto-launch', (_event, enable: boolean) => {
-  app.setLoginItemSettings({
-    openAtLogin: enable,
-    args: enable ? ['--hidden'] : [],
-  });
+  settingsStore.setLaunchAtLogin(enable);
+  if (enable && process.platform === 'darwin') {
+    app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true });
+  } else if (enable) {
+    app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+  } else {
+    app.setLoginItemSettings({ openAtLogin: false });
+  }
+  return settingsStore.getLaunchAtLogin();
 });

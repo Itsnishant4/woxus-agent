@@ -24,12 +24,20 @@ function AppearanceSection() {
 
 function SystemSection() {
   const [autoLaunch, setAutoLaunch] = useState(false);
+  const [hotkey, setHotkey] = useState('CommandOrControl+Shift+P');
 
   useEffect(() => {
     // @ts-ignore
     if (window.electronAPI?.getAutoLaunch) {
       // @ts-ignore
       window.electronAPI.getAutoLaunch().then(setAutoLaunch);
+    }
+    // @ts-ignore
+    if (window.electronAPI?.getGlobalHotkey) {
+      // @ts-ignore
+      window.electronAPI.getGlobalHotkey().then((h: string) => {
+        if (h) setHotkey(h);
+      });
     }
   }, []);
 
@@ -43,19 +51,53 @@ function SystemSection() {
     }
   };
 
+  const saveHotkey = async () => {
+    // @ts-ignore
+    if (window.electronAPI?.setGlobalHotkey) {
+      // @ts-ignore
+      await window.electronAPI.setGlobalHotkey(hotkey);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between">
-      <div>
-        <label htmlFor="auto-launch" className="text-sm font-medium text-foreground">Launch on startup</label>
-        <p className="text-xs text-muted-foreground">Auto-start Woxus when you log in</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <label htmlFor="auto-launch" className="text-sm font-medium text-foreground">Launch on startup</label>
+          <p className="text-xs text-muted-foreground">Auto-start Woxus when you log in</p>
+        </div>
+        <Switch isSelected={autoLaunch} onChange={toggleAutoLaunch}>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+          </Switch.Content>
+        </Switch>
       </div>
-      <Switch isSelected={autoLaunch} onChange={toggleAutoLaunch}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-        </Switch.Content>
-      </Switch>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <div>
+          <label htmlFor="global-hotkey" className="text-sm font-medium text-foreground">Global Hotkey</label>
+          <p className="text-xs text-muted-foreground">Shortcut to toggle the Woxus overlay (e.g. CommandOrControl+Shift+P)</p>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            id="global-hotkey"
+            value={hotkey}
+            onChange={(e) => setHotkey(e.target.value)}
+            className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          <button
+            onClick={saveHotkey}
+            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all"
+          >
+            Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

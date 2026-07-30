@@ -1,5 +1,5 @@
 import { createServer } from 'vite';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { createRequire } from 'module';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -9,6 +9,10 @@ const root = resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 
 async function start() {
+  // Build electron main process files first
+  console.log('[Electron Build] Compiling typescript files...');
+  execSync('node scripts/build-electron.mjs', { cwd: root, stdio: 'inherit' });
+
   const server = await createServer({ configFile: './vite.config.ts', root });
   await server.listen();
 

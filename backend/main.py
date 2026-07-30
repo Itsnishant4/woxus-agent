@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import chat, memory, settings, system, voice, terminal, notes, license, trial, feedback, tasks
+from .routes import chat, memory, settings, system, voice, terminal, notes, license, trial, feedback, tasks, overlay
 from .config import load_config
 from .middleware import license_check_middleware, trial_limiter_middleware
 
@@ -52,6 +52,7 @@ app.include_router(license.router, prefix="/api/license", tags=["license"])
 app.include_router(trial.router, prefix="/api/trial", tags=["trial"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(overlay.router, prefix="/api/overlay", tags=["overlay"])
 
 
 if __name__ == "__main__":

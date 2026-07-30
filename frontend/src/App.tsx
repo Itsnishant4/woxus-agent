@@ -8,6 +8,7 @@ import { Button, Separator } from '@heroui/react';
 import HomePage from '@pages/HomePage';
 import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
+import OverlayPage from '@pages/OverlayPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
 import Toaster from '@components/Toast';
@@ -161,6 +162,14 @@ export default function App() {
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
   }, []);
+
+  if (window.location.hash === '#/overlay') {
+    return (
+      <div className="h-screen w-full bg-transparent">
+        <OverlayPage />
+      </div>
+    );
+  }
 
   const s = statusConfig[agentStatus];
 

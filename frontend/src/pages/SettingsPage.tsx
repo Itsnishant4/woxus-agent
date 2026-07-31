@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, Switch, Separator } from '@heroui/react';
-import { Palette, Bell, Shield, Info, Monitor } from 'lucide-react';
+import { Palette, Bell, Shield, Info, Monitor, Download, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
 function AppearanceSection() {
@@ -102,6 +102,94 @@ function SystemSection() {
   );
 }
 
+function UpdateSection() {
+  const [status, setStatus] = useState<string>('idle');
+  const [percent, setPercent] = useState(0);
+  const [version, setVersion] = useState('');
+  const [newVersion, setNewVersion] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electronAPI?.getAppVersion) {
+      // @ts-ignore
+      window.electronAPI.getAppVersion().then(setVersion);
+    }
+    // @ts-ignore
+    if (window.electronAPI?.onUpdateStatus) {
+      // @ts-ignore
+      const unsubscribe = window.electronAPI.onUpdateStatus((state: any) => {
+        setStatus(state.status);
+        if (state.percent != null) setPercent(state.percent);
+        if (state.version) setNewVersion(state.version);
+        if (state.error) setError(state.error);
+      });
+      return unsubscribe;
+    }
+  }, []);
+
+  // @ts-ignore
+  const api = window.electronAPI;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium text-foreground">Woxus {version}</label>
+          <p className="text-xs text-muted-foreground">Check for new versions automatically</p>
+        </div>
+        <button
+          onClick={() => api?.checkForUpdates()}
+          disabled={status === 'checking' || status === 'downloading'}
+          className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${status === 'checking' ? 'animate-spin' : ''}`} />
+          Check for Updates
+        </button>
+      </div>
+
+      {status === 'available' && (
+        <p className="text-sm text-violet-600">Update v{newVersion} found — downloading…</p>
+      )}
+
+      {status === 'downloading' && (
+        <div className="space-y-1.5">
+          <p className="text-sm text-violet-600">Downloading v{newVersion}… {percent}%</p>
+          <div className="w-full h-2 rounded-full bg-accent overflow-hidden">
+            <div className="h-full bg-violet-600 transition-all" style={{ width: `${percent}%` }} />
+          </div>
+        </div>
+      )}
+
+      {status === 'downloaded' && (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-emerald-600 flex items-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4" /> Update v{newVersion} ready
+          </p>
+          <button
+            onClick={() => api?.installUpdate()}
+            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" /> Restart &amp; Update
+          </button>
+        </div>
+      )}
+
+      {status === 'none' && (
+        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" /> You&apos;re up to date
+        </p>
+      )}
+
+      {status === 'error' && (
+        <p className="text-sm text-red-500 flex items-center gap-1.5">
+          <XCircle className="h-4 w-4" /> Update check failed: {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ApiKeySection() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
@@ -173,6 +261,22 @@ function ApiKeySection() {
     </div>
   );
 }
+function AboutSection() {
+  const [version, setVersion] = useState('');
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electronAPI?.getAppVersion) {
+      // @ts-ignore
+      window.electronAPI.getAppVersion().then(setVersion);
+    }
+  }, []);
+  return (
+    <div className="space-y-1 text-sm text-muted-foreground">
+      <p>Woxus v{version}</p>
+      <p>Built with love 🧡 Team Woxus 🇮🇳</p>
+    </div>
+  );
+}
 
 const sections = [
   {
@@ -218,16 +322,18 @@ const sections = [
     content: <ApiKeySection />,
   },
   {
+    id: 'updates',
+    title: 'Updates',
+    description: 'Keep Woxus up to date',
+    icon: Download,
+    content: <UpdateSection />,
+  },
+  {
     id: 'about',
     title: 'About',
     description: 'Version and information',
     icon: Info,
-    content: (
-      <div className="space-y-1 text-sm text-muted-foreground">
-        <p>Woxus v0.1.0</p>
-        <p>Built with love 🧡 Team Woxus 🇮🇳</p>
-      </div>
-    ),
+    content: <AboutSection />,
   },
 ];
 

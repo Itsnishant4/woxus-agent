@@ -43,7 +43,8 @@ cd frontend && npm install && npm run dev
 
 **Backend:**
 ```bash
-cd backend && pip install -r requirements.txt && uvicorn main:app --reload --port 8000
+cd backend && pip install -r requirements.txt
+cd .. && uvicorn backend.main:app --reload --port 8000
 ```
 
 Open `http://localhost:5173` and talk to Woxus.

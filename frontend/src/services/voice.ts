@@ -15,10 +15,14 @@
 import { MediaHandler } from '../lib/media-handler';
 import { GeminiClient } from '../lib/gemini-client';
 import { useVoiceStore } from '../store/voice';
+import { toast } from 'react-hot-toast';
 
 const mediaHandler = new MediaHandler();
 
 let geminiClient: GeminiClient | null = null;
+let _connectingLock = false;
+let _retryLock = false;
+let _serverError = false;
 
 export type TranscriptionHandler = (role: string, text: string) => void;
 
@@ -29,7 +33,11 @@ export type TranscriptionHandler = (role: string, text: string) => void;
 export async function startVoiceSession(
   onTranscription?: TranscriptionHandler
 ): Promise<void> {
+  if (_connectingLock) return;
+  _connectingLock = true;
+
   const store = useVoiceStore.getState();
+  store.setSttStatus('idle');
 
   // Initialize audio context (must be from user gesture)
   await mediaHandler.initializeAudio();
@@ -54,6 +62,7 @@ export async function startVoiceSession(
           store.setMicActive(true);
           resolve();
         } catch (e) {
+          _connectingLock = false;
           reject(e);
         }
       },
@@ -73,16 +82,38 @@ export async function startVoiceSession(
         }
       },
 
-      onClose: () => {
-        console.log('Gemini Live disconnected');
+      onClose: (event) => {
+        console.log('Gemini Live disconnected', event?.code);
+        _connectingLock = false;
         store.setConnected(false);
         store.setListening(false);
         mediaHandler.stopAudio();
         store.setMicActive(false);
+
+        // Backend already retried with history replay; only reconnect once on
+        // abnormal drops, and never after a server-reported error.
+        const abnormal =
+          event?.code != null &&
+          event.code !== 1000 &&
+          event.code !== 1001 &&
+          !_serverError;
+        if (abnormal && !_retryLock) {
+          _retryLock = true;
+          toast('Voice session dropped — reconnecting…');
+          setTimeout(async () => {
+            _retryLock = false;
+            try {
+              await startVoiceSession(onTranscription);
+            } catch (e) {
+              console.error('Voice reconnect failed:', e);
+            }
+          }, 2000);
+        }
       },
 
       onError: (e) => {
         console.error('Gemini Live error:', e);
+        _connectingLock = false;
         store.setConnected(false);
       },
     });
@@ -99,6 +130,7 @@ export function stopVoiceSession(): void {
   mediaHandler.stopAudioPlayback();
   geminiClient?.disconnect();
   geminiClient = null;
+  _serverError = false;
   useVoiceStore.getState().setConnected(false);
   useVoiceStore.getState().setListening(false);
   useVoiceStore.getState().setMicActive(false);
@@ -144,8 +176,23 @@ function handleJsonMessage(
       onTranscription?.('gemini', msg.text);
       break;
 
+    case 'latency_log':
+      console.log(`⏱️ [LATENCY LOG] User spoke/sent: "${msg.user_text}" | Woxus response time: ${msg.latency_sec}s (${msg.latency_ms}ms)`);
+      break;
+
+    case 'stt_downloading':
+      store.setSttStatus('downloading');
+      toast(msg.message || 'Downloading speech recognition model…');
+      break;
+
+    case 'stt_ready':
+      store.setSttStatus('ready');
+      break;
+
     case 'error':
       console.error('Gemini Live error:', msg.message);
+      _serverError = true;
+      toast.error(String(msg.message || 'Voice session failed'));
       break;
 
     default:

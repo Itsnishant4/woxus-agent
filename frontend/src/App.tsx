@@ -9,9 +9,11 @@ import HomePage from '@pages/HomePage';
 import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
 import OverlayPage from '@pages/OverlayPage';
+import OrbPage from '@pages/OrbPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
 import Toaster from '@components/Toast';
+import ModelDownloadScreen from '@components/ModelDownloadScreen';
 import { useTheme } from '@/hooks/useTheme';
 
 type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
@@ -109,11 +111,30 @@ function CmdPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
 export default function App() {
   useTheme();
   const [appStatus, setAppStatus] = useState<AppStatus>('loading');
+  const [modelReady, setModelReady] = useState<boolean | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');
   const [cmdOpen, setCmdOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const checkModelStatus = useCallback(async () => {
+    try {
+      const res = await window.fetch('/api/model/status');
+      const data = await res.json();
+      if (data.installed) {
+        setModelReady(true);
+      } else {
+        setModelReady(false);
+      }
+    } catch {
+      setModelReady(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkModelStatus();
+  }, [checkModelStatus]);
 
   const checkLicense = useCallback(async () => {
     // @ts-ignore
@@ -156,16 +177,24 @@ export default function App() {
     );
   }
 
+  if (window.location.hash === '#/orb') {
+    return <OrbPage />;
+  }
+
   const s = statusConfig[agentStatus];
 
-  if (appStatus === 'loading') {
+  if (modelReady === false) {
+    return <ModelDownloadScreen onComplete={() => setModelReady(true)} />;
+  }
+
+  if (appStatus === 'loading' || modelReady === null) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 mx-auto rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
             <span className="text-lg font-bold text-white">W</span>
           </div>
-          <p className="text-sm text-muted-foreground animate-pulse">Checking license...</p>
+          <p className="text-sm text-muted-foreground animate-pulse">Initializing Woxus...</p>
         </div>
       </div>
     );

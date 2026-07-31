@@ -1,4 +1,4 @@
-"""Woxus — Local FunctionGemma 270M Model Manager & Mini Agent Engine.
+"""Woxus — Local SmolLM3 3B Model Manager & Mini Agent Engine.
 
 Manages hardware detection (Apple Silicon Metal / NVIDIA CUDA / CPU), downloading hardware-optimized
 model weights, local installation, progress tracking, and local inference execution.
@@ -18,9 +18,13 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "Local Mini Agent"
-MODEL_DIR = os.path.expanduser("~/.woxus/models/functiongemma-270m")
-MODEL_FILE = os.path.join(MODEL_DIR, "functiongemma-270m-it.gguf")
+MODEL_NAME = "Woxus Agent (SmolLM3 3B)"
+MODEL_DIR = os.path.expanduser("~/.woxus/models/smollm3-3b")
+MODEL_FILE = os.path.join(MODEL_DIR, "SmolLM3-3B-Q4_K_M.gguf")
+MODEL_BYTES = 1915305312  # Ollama blob size (alibayram/smollm3 Q4_K_M)
+
+# Sole download source: Ollama registry (fast CDN, Asia-friendly)
+_OLLAMA_URL = "https://registry.ollama.ai/v2/alibayram/smollm3/blobs/sha256-048b986bb243c09b5410fc9f73bdc5bf749bf8e24e1a703ca830c1b29b0267f8"
 
 
 def detect_hardware() -> dict:
@@ -34,14 +38,14 @@ def detect_hardware() -> dict:
                 "type": "mac_metal",
                 "device": "Apple Silicon (Metal GPU)",
                 "description": "Apple M-Series Metal Accelerated",
-                "download_url": "https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_K_M.gguf",
+                "download_url": _OLLAMA_URL,
             }
         else:
             return {
                 "type": "mac_intel",
                 "device": "Intel Mac CPU",
                 "description": "Intel Mac CPU",
-                "download_url": "https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_0.gguf",
+                "download_url": _OLLAMA_URL,
             }
 
     cuda_available = False
@@ -65,14 +69,14 @@ def detect_hardware() -> dict:
             "type": "nvidia_cuda",
             "device": f"NVIDIA GPU ({gpu_name})",
             "description": f"CUDA Accelerated ({gpu_name})",
-            "download_url": "https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q5_K_M.gguf",
+            "download_url": _OLLAMA_URL,
         }
 
     return {
         "type": "cpu",
         "device": "System CPU",
         "description": "Standard CPU",
-        "download_url": "https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_0.gguf",
+        "download_url": _OLLAMA_URL,
     }
 
 
@@ -93,16 +97,22 @@ _model_status = {
 _lock = threading.Lock()
 
 
+def _model_file_for(hw_info: dict) -> str:
+    """Resolve the model file path (fixed name — blob URLs carry hash basenames)."""
+    return MODEL_FILE
+
+
 def get_model_status() -> dict:
     """Return copy of current Local Mini Agent model status & hardware info."""
     with _lock:
-        if os.path.exists(MODEL_FILE) and os.path.getsize(MODEL_FILE) > 10 * 1024 * 1024:
+        installed_file = _model_file_for(_hw)
+        if os.path.exists(installed_file) and os.path.getsize(installed_file) > 10 * 1024 * 1024:
             if not _model_status["downloading"]:
                 _model_status["installed"] = True
                 _model_status["progress"] = 100.0
                 _model_status["status_text"] = f"Local Mini Agent Ready ({_hw['device']})"
-                _model_status["bytes_downloaded"] = os.path.getsize(MODEL_FILE)
-                _model_status["total_bytes"] = os.path.getsize(MODEL_FILE)
+                _model_status["bytes_downloaded"] = os.path.getsize(installed_file)
+                _model_status["total_bytes"] = os.path.getsize(installed_file)
         return dict(_model_status)
 
 
@@ -124,71 +134,147 @@ def start_model_download() -> dict:
     return get_model_status()
 
 
-def _download_worker():
-    """Worker thread that streams hardware-optimized model weights with progress reporting."""
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    temp_file = MODEL_FILE + ".tmp"
+def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) -> bool:
+    """Stdlib-only parallel downloader: `streams` concurrent Range requests written to
+    part files, then concatenated in order. Much faster than a single stream."""
+    import threading as _t
 
-    hw_info = detect_hardware()
-    target_url = hw_info["download_url"]
-    fallback_url = "https://huggingface.co/unsloth/functiongemma-270m-it-GGUF/resolve/main/functiongemma-270m-it-Q4_0.gguf"
+    part_files = [f"{dest}.p{i}" for i in range(streams)]
+    ok = [False] * streams
+    chunk_size = (total_bytes + streams - 1) // streams
 
-    urls = [target_url, fallback_url]
-    download_success = False
-
-    for current_url in urls:
+    def _worker(i: int):
+        start = i * chunk_size
+        end = min(start + chunk_size - 1, total_bytes - 1)
         try:
-            logger.info("🤖 [LOCAL MODEL] Starting model download for %s from %s", hw_info["device"], current_url)
             req = urllib.request.Request(
-                current_url,
-                headers={"User-Agent": "Mozilla/5.0 (Woxus-Local-Installer)"},
+                url,
+                headers={
+                    "Range": f"bytes={start}-{end}",
+                    "User-Agent": "Mozilla/5.0 (Woxus-Local-Installer)",
+                },
             )
-            with urllib.request.urlopen(req, timeout=30) as response, open(temp_file, "wb") as out_f:
-                content_length = response.headers.get("Content-Length")
-                total_bytes = int(content_length) if content_length else 253 * 1024 * 1024
-
-                with _lock:
-                    _model_status["total_bytes"] = total_bytes
-
-                downloaded = 0
-                chunk_size = 256 * 1024
-
+            with urllib.request.urlopen(req, timeout=60) as resp, open(part_files[i], "wb") as out_f:
                 while True:
-                    chunk = response.read(chunk_size)
+                    chunk = resp.read(1 << 20)
                     if not chunk:
                         break
                     out_f.write(chunk)
-                    downloaded += len(chunk)
-                    pct = min(100.0, round((downloaded / total_bytes) * 100, 1))
-
-                    mb_down = round(downloaded / (1024 * 1024), 1)
-                    mb_total = round(total_bytes / (1024 * 1024), 1)
-
-                    with _lock:
-                        _model_status["bytes_downloaded"] = downloaded
-                        _model_status["progress"] = pct
-                        _model_status["status_text"] = f"Downloading Local Mini Agent ({mb_down} MB / {mb_total} MB)"
-
-            os.rename(temp_file, MODEL_FILE)
-            download_success = True
-            break
+            ok[i] = True
         except Exception as e:
-            logger.warning("🤖 [LOCAL MODEL] Download attempt failed from %s: %s", current_url, e)
-            if os.path.exists(temp_file):
-                try: os.remove(temp_file)
-                except Exception: pass
+            logger.warning("🤖 [LOCAL MODEL] Parallel stream %d failed: %s", i, e)
 
+    threads = [_t.Thread(target=_worker, args=(i,), daemon=True) for i in range(streams)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    if not all(ok):
+        for p in part_files:
+            try: os.remove(p)
+            except Exception: pass
+        return False
+
+    with open(dest, "wb") as out_f:
+        for p in part_files:
+            with open(p, "rb") as in_f:
+                while True:
+                    chunk = in_f.read(1 << 22)
+                    if not chunk:
+                        break
+                    out_f.write(chunk)
+    for p in part_files:
+        try: os.remove(p)
+        except Exception: pass
+    return os.path.getsize(dest) == total_bytes
+
+
+def _download_worker():
+    """Worker thread that downloads the model from the Ollama registry using
+    parallel Range streams, reporting live progress to the UI."""
+    os.makedirs(MODEL_DIR, exist_ok=True)
+
+    hw_info = detect_hardware()
+    target_url = hw_info["download_url"]
+    target_file = _model_file_for(hw_info)
+    temp_file = target_file + ".tmp"
+
+    download_success = False
+
+    # Fast path: parallel Range download from the Ollama registry (fast, no HF)
+    total_bytes = MODEL_BYTES
+    try:
+        req = urllib.request.Request(target_url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            total_bytes = int(resp.headers.get("Content-Length") or 0) or MODEL_BYTES
+    except Exception:
+        pass
     with _lock:
-        if download_success:
+        _model_status["total_bytes"] = total_bytes
+        _model_status["status_text"] = f"Downloading Local Mini Agent ({_hw['device']})..."
+
+    import threading as _t
+    stop = _t.Event()
+
+    def _on_disk_bytes() -> int:
+        size = 0
+        try:
+            if os.path.exists(temp_file):
+                size += os.path.getsize(temp_file)
+            for i in range(6):
+                part = f"{temp_file}.p{i}"
+                if os.path.exists(part):
+                    size += os.path.getsize(part)
+        except Exception:
+            pass
+        return size
+
+    def _progress_poller():
+        while not stop.is_set():
+            try:
+                on_disk = _on_disk_bytes()
+                pct = min(100.0, round((on_disk / total_bytes) * 100, 1)) if total_bytes else 0.0
+                with _lock:
+                    _model_status["bytes_downloaded"] = on_disk
+                    _model_status["progress"] = pct
+                    mb_down = round(on_disk / (1024 * 1024), 1)
+                    mb_total = round(total_bytes / (1024 * 1024), 1)
+                    _model_status["status_text"] = f"Downloading Local Mini Agent ({mb_down} MB / {mb_total} MB)"
+            except Exception:
+                pass
+            stop.wait(1.0)
+
+    poller = _t.Thread(target=_progress_poller, daemon=True)
+    poller.start()
+    try:
+        if total_bytes > 0 and _parallel_download(target_url, temp_file, total_bytes, streams=6):
+            os.rename(temp_file, target_file)
+            download_success = True
+            logger.info("🤖 [LOCAL MODEL] Parallel download complete (Ollama registry): %s", target_file)
+    except Exception as e:
+        logger.warning("🤖 [LOCAL MODEL] Ollama parallel download failed: %s", e)
+    finally:
+        stop.set()
+
+    if not download_success and os.path.exists(target_file):
+        try: os.remove(target_file)
+        except Exception: pass
+
+    if download_success:
+        with _lock:
             _model_status["installed"] = True
             _model_status["downloading"] = False
             _model_status["progress"] = 100.0
             _model_status["status_text"] = f"Local Mini Agent Ready ({hw_info['device']})"
             logger.info("🎉 [LOCAL MODEL] Hardware-optimized model download complete (%s)!", hw_info["device"])
-        else:
-            _model_status["downloading"] = False
-            _model_status["status_text"] = "Download Failed. Retrying..."
-            _model_status["error"] = "Could not download model weights"
+        return
+
+    with _lock:
+        _model_status["downloading"] = False
+        _model_status["status_text"] = "Download Failed. Retrying..."
+        _model_status["error"] = "Could not download model weights"
+
 
 
 async def run_local_mini_agent(prompt: str) -> dict:
@@ -202,18 +288,113 @@ async def run_local_mini_agent(prompt: str) -> dict:
     logger.info("🤖 [LOCAL MINI AGENT] Executing task on %s: '%s'", hw_info["device"], prompt[:100])
 
     from .tool_executor import _execute_tool_raw
-    from .mini_agent import auto_heal_command, _parse_natural_language_intent, _normalize_and_optimize_command
+    from .mini_agent import auto_heal_command, _SHELL_KEYWORDS, _normalize_and_optimize_command
 
-    # First: use mini_agent's natural language parser to convert NL to shell commands
-    nl_commands = _parse_natural_language_intent(prompt)
-    command = nl_commands[0] if nl_commands else prompt.strip()
+    # Direct shell command (e.g. "pwd", "ls -la") — execute as-is without AI
+    code_blocks = re.findall(r"```(?:bash|sh|shell)?\n(.*?\n?)```", prompt, re.DOTALL)
+    if code_blocks:
+        prompt = code_blocks[0].strip()
+
+    first_word = prompt.strip().split()[0].lower() if prompt.strip() else ""
+    direct_cmd = first_word in _SHELL_KEYWORDS or any(f" {kw} " in f" {prompt} " for kw in _SHELL_KEYWORDS)
+
+    if not direct_cmd:
+        # Agentic loop: AI reasons → calls tools → sees results → answers
+        from .nano_inference import agent_step, is_model_ready, AGENT_PROMPT
+        if not is_model_ready():
+            return {
+                "status": "info",
+                "device": hw_info["device"],
+                "prompt": prompt,
+                "attempts_count": 0,
+                "tools_executed": [],
+                "execution_trace": [],
+                "mini_agent_output": "I'm still setting up. Please try again in a moment.",
+                "message": "I'm still setting up. Please try again in a moment.",
+            }
+
+        import json as _json
+
+        messages = [
+            {"role": "system", "content": AGENT_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        tools_executed: list = []
+        execution_trace: list = []
+        last_result = ""
+
+        for step in range(1, 6):
+            decision = agent_step(messages)
+            action = (decision or {}).get("action")
+
+            if action == "answer":
+                reply = str(decision.get("reply") or "").strip() or f"Got it: \"{prompt}\"."
+                logger.info("🤖 [LOCAL MINI AGENT] Agent answered after %d step(s) for '%s'", step, prompt[:50])
+                return {
+                    "status": "info" if not tools_executed else "success",
+                    "device": hw_info["device"],
+                    "prompt": prompt,
+                    "attempts_count": step,
+                    "tools_executed": tools_executed,
+                    "execution_trace": execution_trace,
+                    "mini_agent_output": reply,
+                    "message": reply,
+                }
+
+            if action == "tool":
+                command = str((decision.get("args") or {}).get("command") or "").strip()
+                if not command:
+                    messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                    messages.append({"role": "user", "content": "That tool call was empty. Call a tool properly or answer."})
+                    continue
+
+                tools_executed.append(command)
+                logger.info("🤖 [LOCAL MINI AGENT] Agent tool call (%d/5): '%s'", step, command)
+                res = await _execute_tool_raw("terminal_exec", {
+                    "command": command,
+                    "background": False,
+                    "_from_mini_agent": True,
+                    "timeout_seconds": 60,
+                })
+                out = res.get("stdout", "")
+                err = res.get("stderr", "")
+                code = res.get("exit_code")
+                last_result = out or err
+                execution_trace.append({
+                    "attempt": step,
+                    "tool": "terminal_exec",
+                    "command": command,
+                    "exit_code": code,
+                    "stdout": out,
+                    "stderr": err,
+                    "status": "success" if code == 0 else "failed",
+                })
+                result_text = f"Tool terminal result (exit {code}):\n{out}\n{err}".strip()[-1500:]
+                messages.append({"role": "assistant", "content": _json.dumps(decision)})
+                messages.append({"role": "user", "content": result_text})
+                continue
+
+            # Invalid / no action — nudge the model once, then give up gracefully
+            messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+            messages.append({"role": "user", "content": "Invalid response. Use a tool or answer the user."})
+            if step >= 2:
+                break
+
+        reply = last_result.strip() or f"Got it: \"{prompt}\"."
+        logger.info("🤖 [LOCAL MINI AGENT] Agent loop exhausted for '%s'", prompt[:50])
+        return {
+            "status": "success" if tools_executed else "info",
+            "device": hw_info["device"],
+            "prompt": prompt,
+            "attempts_count": 5,
+            "tools_executed": tools_executed,
+            "execution_trace": execution_trace,
+            "mini_agent_output": reply,
+            "message": reply,
+        }
+    else:
+        command = prompt.strip()
     command = _normalize_and_optimize_command(command)
-
-    # If NL parser returned same as raw prompt, try code-block extraction
-    if command == prompt.strip():
-        code_blocks = re.findall(r"```(?:bash|sh|shell)?\n(.*?\n?)```", prompt, re.DOTALL)
-        if code_blocks:
-            command = code_blocks[0].strip()
 
     is_check_op = any(kw in command.lower() for kw in ["ls ", "ls", "test ", "cat ", "grep ", "find ", "check"])
 
@@ -280,4 +461,163 @@ async def run_local_mini_agent(prompt: str) -> dict:
         "execution_trace": initial_trace,
         "mini_agent_output": output_text,
         "message": f"Local Mini Agent Telemetry Report:\n- Total Attempts: 1\n- Command Executed: {command}\n- Output:\n{output_text}",
+    }
+
+
+# Absolute safety kill-switch for the unbounded overlay agent loop (never hit in practice)
+OVERLAY_AGENT_MAX_STEPS = 50
+# Trim history once it exceeds this many characters (rough guard against context overflow)
+OVERLAY_AGENT_HISTORY_BUDGET = 7000
+# Keep the newest tool rounds after trimming
+OVERLAY_AGENT_KEEP_ROUNDS = 8
+# Maximum conversation history (in characters) replayed into the model context.
+# The model window is 8192 tokens (~32K chars) — this keeps prior turns + prompt + loop
+# messages inside it even for very long overlay conversations.
+OVERLAY_AGENT_CONTEXT_BUDGET = 6000
+# Minimum turns kept even if over budget (so short follow-ups like "remove it" keep their anchor)
+OVERLAY_AGENT_MIN_HISTORY_TURNS = 4
+
+
+async def run_overlay_agent(prompt: str, history: Optional[list] = None) -> dict:
+    """Agentic overlay loop: the AI calls the terminal tool as many times as it needs, then answers.
+
+    Unlike run_local_mini_agent (capped at 5 steps), this loop is unbounded so the AI can
+    chain N tool calls to reach a proper result. Context is trimmed as history grows.
+    `history` carries prior user/AI turns from the overlay conversation so the AI
+    understands follow-ups like "remove it".
+    """
+    status = get_model_status()
+    if not status["installed"] and not status["downloading"]:
+        start_model_download()
+
+    hw_info = status.get("hardware", _hw)
+    logger.info("🤖 [OVERLAY AGENT] Executing task on %s: '%s'", hw_info["device"], prompt[:100])
+
+    from .tool_executor import _execute_tool_raw
+    from .nano_inference import agent_step, is_model_ready, AGENT_PROMPT
+
+    if not is_model_ready():
+        return {
+            "status": "info",
+            "device": hw_info["device"],
+            "prompt": prompt,
+            "attempts_count": 0,
+            "tools_executed": [],
+            "execution_trace": [],
+            "mini_agent_output": "I'm still setting up. Please try again in a moment.",
+            "message": "I'm still setting up. Please try again in a moment.",
+        }
+
+    import json as _json
+
+    # Enforce the context limit: keep the newest history turns that fit the budget
+    history_turns = [t for t in (history or []) if t.get("role") in ("user", "assistant") and t.get("content")]
+    history_size = sum(len(str(t.get("content", ""))) for t in history_turns)
+    while history_size > OVERLAY_AGENT_CONTEXT_BUDGET and len(history_turns) > OVERLAY_AGENT_MIN_HISTORY_TURNS:
+        dropped = history_turns.pop(0)
+        history_size -= len(str(dropped.get("content", "")))
+    if len(history or []) > len(history_turns):
+        logger.info("🤖 [OVERLAY AGENT] Dropped %d old turn(s); context size %d chars", len(history or []) - len(history_turns), history_size)
+
+    messages = [{"role": "system", "content": AGENT_PROMPT}]
+    for turn in history_turns:
+        messages.append({"role": turn["role"], "content": turn["content"]})
+    if history_turns:
+        messages.append({"role": "user", "content": f"Previous messages are above.\nCurrent request: {prompt}"})
+    else:
+        messages.append({"role": "user", "content": prompt})
+    tools_executed: list = []
+    execution_trace: list = []
+    last_result = ""
+    invalid_count = 0
+    repeat_nudges = 0
+
+    for step in range(1, OVERLAY_AGENT_MAX_STEPS + 1):
+        # Context guard: if history is getting long, drop the oldest tool rounds
+        history_size = sum(len(str(m.get("content", ""))) for m in messages)
+        if history_size > OVERLAY_AGENT_HISTORY_BUDGET and len(messages) > 4:
+            keep = messages[:2]
+            keep += messages[-OVERLAY_AGENT_KEEP_ROUNDS * 2:]
+            messages = keep
+            logger.info("🤖 [OVERLAY AGENT] Trimmed history to %d messages (was %d chars)", len(messages), history_size)
+
+        decision = agent_step(messages)
+        action = (decision or {}).get("action")
+
+        if action == "answer":
+            reply = str(decision.get("reply") or "").strip() or f"Got it: \"{prompt}\"."
+            logger.info("🤖 [OVERLAY AGENT] Answered after %d step(s) for '%s'", step, prompt[:50])
+            return {
+                "status": "info" if not tools_executed else "success",
+                "device": hw_info["device"],
+                "prompt": prompt,
+                "attempts_count": step,
+                "tools_executed": tools_executed,
+                "execution_trace": execution_trace,
+                "mini_agent_output": reply,
+                "message": reply,
+            }
+
+        if action == "tool":
+            invalid_count = 0
+            command = str((decision.get("args") or {}).get("command") or "").strip()
+            if not command:
+                messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                messages.append({"role": "user", "content": "That tool call was empty. Call a tool properly or answer."})
+                continue
+
+            if command in tools_executed[-2:]:
+                repeat_nudges += 1
+                if repeat_nudges >= 2:
+                    logger.warning("🤖 [OVERLAY AGENT] Repeated tool call '%s' — stopping loop", command)
+                    break
+                messages.append({"role": "assistant", "content": _json.dumps(decision)})
+                messages.append({"role": "user", "content": "You already ran that exact command. The result is above — answer the user now."})
+                continue
+            repeat_nudges = 0
+
+            tools_executed.append(command)
+            logger.info("🤖 [OVERLAY AGENT] Tool call %d: '%s'", step, command)
+            res = await _execute_tool_raw("terminal_exec", {
+                "command": command,
+                "background": False,
+                "_from_mini_agent": True,
+                "timeout_seconds": 60,
+            })
+            out = res.get("stdout", "")
+            err = res.get("stderr", "")
+            code = res.get("exit_code")
+            last_result = out or err
+            execution_trace.append({
+                "attempt": step,
+                "tool": "terminal_exec",
+                "command": command,
+                "exit_code": code,
+                "stdout": out,
+                "stderr": err,
+                "status": "success" if code == 0 else "failed",
+            })
+            result_text = f"Tool terminal result (exit {code}) for command '{command}':\n{out}\n{err}\n\nRemaining steps may exist — do the next one, or answer the user now."[-1800:]
+            messages.append({"role": "assistant", "content": _json.dumps(decision)})
+            messages.append({"role": "user", "content": result_text})
+            continue
+
+        # Invalid / no action — nudge twice, then give up gracefully
+        invalid_count += 1
+        messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+        messages.append({"role": "user", "content": "Invalid response. Use the terminal tool or answer the user."})
+        if invalid_count >= 2:
+            break
+
+    reply = last_result.strip() or f"Got it: \"{prompt}\"."
+    logger.info("🤖 [OVERLAY AGENT] Loop ended without answer for '%s'", prompt[:50])
+    return {
+        "status": "success" if tools_executed else "info",
+        "device": hw_info["device"],
+        "prompt": prompt,
+        "attempts_count": OVERLAY_AGENT_MAX_STEPS,
+        "tools_executed": tools_executed,
+        "execution_trace": execution_trace,
+        "mini_agent_output": reply,
+        "message": reply,
     }

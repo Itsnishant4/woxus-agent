@@ -1,36 +1,58 @@
 """Woxus — Gemini tool function declarations.
 
 Defines the OpenAPI-style schemas Gemini uses for function calling.
+The Main Agent ONLY has access to `delegate_task_to_mini_agent` to delegate execution to the Local Mini Agent.
 """
 
 from google.genai import types
 
 
-# --- Terminal tool ---
+# --- Delegate Task Tool (Primary Main Agent Tool) ---
+
+delegate_task_declaration = types.FunctionDeclaration(
+    name="delegate_task_to_mini_agent",
+    description=(
+        "Delegate any command, project creation, terminal action, build, or file operation to the Local Mini Agent. "
+        "The Main Agent DOES NOT execute terminal commands directly — it MUST delegate ALL tasks to the Local Mini Agent. "
+        "Provide a detailed task_prompt describing what the Local Mini Agent should execute."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "task_prompt": types.Schema(
+                type=types.Type.STRING,
+                description="The detailed task or command prompt for the Local Mini Agent to execute.",
+            ),
+        },
+        required=["task_prompt"],
+    ),
+)
+
+
+# --- Internal Tool Declarations (Used by Mini Agent) ---
 
 terminal_declaration = types.FunctionDeclaration(
     name="terminal_exec",
     description=(
         "Execute a shell command on the user's machine. "
         "Use for: creating projects, installing packages, running builds, "
-        "git operations, file system operations. "
-        "For long-running commands, set background=true and poll status with terminal_status."
+        "git operations, file system operations."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
             "command": types.Schema(
                 type=types.Type.STRING,
-                description="Shell command to execute (e.g. 'cd ~/Desktop && npx create-react-app my-app')",
+                description="Shell command to execute",
             ),
             "background": types.Schema(
                 type=types.Type.BOOLEAN,
-                description="Run in background (true for long commands). Returns task_id for status polling.",
-                default=False,
+                description="Run in background (defaults to true).",
+                default=True,
             ),
             "timeout_seconds": types.Schema(
                 type=types.Type.INTEGER,
-                description="Max execution time before timeout. Default 30s, max 600s (10 min).",
+                description="Max execution time before timeout.",
                 default=30,
             ),
         },
@@ -46,7 +68,7 @@ terminal_status_declaration = types.FunctionDeclaration(
         properties={
             "task_id": types.Schema(
                 type=types.Type.STRING,
-                description="Task ID returned by terminal_exec with background=true",
+                description="Task ID returned by terminal_exec",
             ),
         },
         required=["task_id"],
@@ -67,20 +89,13 @@ terminal_list_declaration = types.FunctionDeclaration(
 
 write_file_declaration = types.FunctionDeclaration(
     name="write_file",
-    description=(
-        "Write content to a file on the user's machine. "
-        "Use for: creating source files, writing notes, saving configs, "
-        "generating project files. "
-        "Allowed extensions: .py, .js, .ts, .jsx, .tsx, .html, .css, "
-        ".json, .txt, .md, .yaml, .yml, .toml, .env, .gitignore, "
-        ".sh, .bat, .ps1, .sql, .xml, .svg, .cfg, .ini."
-    ),
+    description="Write content to a file on the user's machine.",
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
             "filepath": types.Schema(
                 type=types.Type.STRING,
-                description="Absolute or home-relative path (e.g. '~/Desktop/my-app/src/index.ts')",
+                description="Absolute or home-relative path",
             ),
             "content": types.Schema(
                 type=types.Type.STRING,
@@ -99,7 +114,7 @@ read_file_declaration = types.FunctionDeclaration(
         properties={
             "filepath": types.Schema(
                 type=types.Type.STRING,
-                description="Absolute or home-relative path to the file",
+                description="Absolute or home-relative path",
             ),
         },
         required=["filepath"],
@@ -108,40 +123,36 @@ read_file_declaration = types.FunctionDeclaration(
 
 list_dir_declaration = types.FunctionDeclaration(
     name="list_directory",
-    description="List files and directories at a given path.",
+    description="List files and subdirectories at a path.",
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
             "path": types.Schema(
                 type=types.Type.STRING,
-                description="Absolute or home-relative directory path",
+                description="Path to list (defaults to user home '~')",
+                default="~",
             ),
         },
-        required=["path"],
     ),
 )
 
 
-# --- Memory tool ---
+# --- Memory tools ---
 
 memory_create_declaration = types.FunctionDeclaration(
     name="memory_create",
-    description="Store a memory/fact the user wants to remember. Memories persist across sessions.",
+    description="Save a new memory to long-term storage.",
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
             "content": types.Schema(
                 type=types.Type.STRING,
-                description="The memory content to store (e.g. 'User prefers dark mode in all apps')",
+                description="The fact or user preference to remember",
             ),
-            "importance": types.Schema(
-                type=types.Type.INTEGER,
-                description="Importance level 1-5 (5=critical, 1=trivial). Default 3.",
-                default=3,
-            ),
-            "tags": types.Schema(
+            "category": types.Schema(
                 type=types.Type.STRING,
-                description="Optional comma-separated tags for categorization",
+                description="Category tag (e.g. 'preference', 'tech_stack', 'fact')",
+                default="fact",
             ),
         },
         required=["content"],
@@ -150,13 +161,13 @@ memory_create_declaration = types.FunctionDeclaration(
 
 memory_list_declaration = types.FunctionDeclaration(
     name="memory_list",
-    description="List all stored memories, sorted by importance (highest first).",
+    description="List all stored memories.",
     parameters=types.Schema(
         type=types.Type.OBJECT,
         properties={
             "limit": types.Schema(
                 type=types.Type.INTEGER,
-                description="Max results to return. Default 20.",
+                description="Max results to return.",
                 default=20,
             ),
         },
@@ -179,27 +190,13 @@ memory_delete_declaration = types.FunctionDeclaration(
 )
 
 
-# --- Google Search tool ---
-# Enables the model to search the web for up-to-date information
-
-google_search_tool = types.Tool(
-    google_search=types.GoogleSearch(),
-)
-
-
-# --- Tool list for registering with Gemini ---
+# --- Tool list for registering with Gemini Main Agent ---
 
 agent_tools = [
     types.Tool(function_declarations=[
-        terminal_declaration,
-        terminal_status_declaration,
-        terminal_list_declaration,
-        write_file_declaration,
-        read_file_declaration,
-        list_dir_declaration,
+        delegate_task_declaration,
         memory_create_declaration,
         memory_list_declaration,
         memory_delete_declaration,
     ]),
-    google_search_tool,
 ]

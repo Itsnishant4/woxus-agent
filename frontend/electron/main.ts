@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, screen } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
@@ -19,6 +19,7 @@ function iconPath(...segments: string[]): string {
 
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
+let orbWindows: BrowserWindow[] = [];
 let tray: Tray | null = null;
 let isQuitting = false;
 
@@ -75,10 +76,77 @@ function createWindow() {
     }
   });
 
+  // Show the orb whenever the main window is hidden/minimized; hide it when shown
+  mainWindow.on('hide', () => setOrbVisible(true));
+  mainWindow.on('minimize', () => setOrbVisible(true));
+  mainWindow.on('show', () => setOrbVisible(false));
+
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL);
   } else {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'));
+  }
+}
+
+const ORB_SIZE = 64;
+
+function setOrbVisible(visible: boolean) {
+  for (const win of orbWindows) {
+    if (visible && !win.isVisible()) {
+      win.showInactive();
+    } else if (!visible && win.isVisible()) {
+      win.hide();
+    }
+  }
+}
+
+function createOrbWindow(display: Electron.Display) {
+  const { workArea } = display;
+
+  const orb = new BrowserWindow({
+    width: ORB_SIZE,
+    height: ORB_SIZE,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: join(__dirname, 'preload.js'),
+      sandbox: false,
+    },
+  });
+
+  // Keep the orb above regular windows without stealing focus
+  orb.setAlwaysOnTop(true, 'screen-saver');
+  orb.setPosition(
+    workArea.x + workArea.width - ORB_SIZE - 24,
+    workArea.y + workArea.height - ORB_SIZE - 24,
+  );
+
+  orb.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      orb.hide();
+    }
+  });
+
+  if (VITE_DEV_SERVER_URL) {
+    orb.loadURL(VITE_DEV_SERVER_URL + '#/orb');
+  } else {
+    orb.loadFile(join(__dirname, '../dist/index.html'), { hash: '/orb' });
+  }
+
+  orbWindows.push(orb);
+}
+
+function createOrbWindows() {
+  for (const display of screen.getAllDisplays()) {
+    createOrbWindow(display);
   }
 }
 
@@ -194,6 +262,7 @@ app.whenReady().then(async () => {
 
   createWindow();
   createOverlayWindow();
+  createOrbWindows();
   createTray();
   registerGlobalHotkey();
 
@@ -250,6 +319,16 @@ ipcMain.handle('set-global-hotkey', (_event, hotkey: string) => {
 });
 ipcMain.on('hide-overlay', () => {
   overlayWindow?.hide();
+});
+
+// Orb click → toggle main window visibility
+ipcMain.on('orb-toggle-main', () => {
+  if (mainWindow?.isVisible() && !mainWindow.isMinimized()) {
+    mainWindow.hide();
+  } else {
+    mainWindow?.show();
+    mainWindow?.focus();
+  }
 });
 
 // License IPC handlers

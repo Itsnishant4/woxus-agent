@@ -35,7 +35,3 @@ jobs:
       - run: npx tsc --noEmit
 
       - run: pnpm run build
-
-      - run: pnpm run electron:package
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

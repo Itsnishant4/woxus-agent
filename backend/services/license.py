@@ -1,15 +1,17 @@
 import json
 import logging
-import uuid
 import os
+import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Optional
+
 import pymongo
+
+from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = woxus_data_dir()
 LICENSE_FILE = DATA_DIR / "licenses.json"
 
 _mongo_client = None

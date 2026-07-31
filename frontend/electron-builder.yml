@@ -17,6 +17,10 @@ extraResources:
     to: icons
     filter:
       - "**/*"
+  - from: ../backend/dist/woxus-backend
+    to: backend
+    filter:
+      - "**/*"
 mac:
   icon: ../icons/macos/icon.icns
   target:

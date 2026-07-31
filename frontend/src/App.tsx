@@ -5,6 +5,7 @@ import {
   PanelLeft, Zap, ListChecks, Keyboard, Mic,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
+import { API_BASE } from '@/services/api';
 import HomePage from '@pages/HomePage';
 import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
@@ -120,7 +121,7 @@ export default function App() {
 
   const checkModelStatus = useCallback(async () => {
     try {
-      const res = await window.fetch('/api/model/status');
+      const res = await window.fetch(`${API_BASE}/model/status`);
       const data = await res.json();
       if (data.installed) {
         setModelReady(true);

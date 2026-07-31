@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Terminal, FileText, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { API_BASE } from '@/services/api';
 
 interface Task {
   task_id: string;
@@ -41,7 +42,7 @@ export default function TasksPage() {
 
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await fetch('/api/tasks/');
+      const res = await fetch(`${API_BASE}/tasks/`);
       const data = await res.json();
       setTasks(data.tasks || []);
     } catch (e) {

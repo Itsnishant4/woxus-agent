@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { API_BASE } from '@/services/api';
+
+const MODEL_STATUS_URL = `${API_BASE}/model/status`;
+const MODEL_DOWNLOAD_URL = `${API_BASE}/model/download`;
 
 interface ModelStatus {
   model_name: string;
@@ -21,7 +25,7 @@ export default function ModelDownloadScreen({ onComplete }: Props) {
   useEffect(() => {
     const checkAndDownload = async () => {
       try {
-        const res = await window.fetch('/api/model/status');
+        const res = await window.fetch(MODEL_STATUS_URL);
         const data = await res.json();
         setStatus(data);
 
@@ -31,7 +35,7 @@ export default function ModelDownloadScreen({ onComplete }: Props) {
         }
 
         if (!data.downloading) {
-          await window.fetch('/api/model/download', { method: 'POST' });
+          await window.fetch(MODEL_DOWNLOAD_URL, { method: 'POST' });
         }
       } catch {
         /* ignore */

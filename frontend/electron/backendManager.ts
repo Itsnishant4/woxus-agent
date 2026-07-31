@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { app } from 'electron';
+import { settingsStore } from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,12 +15,24 @@ interface BackendState {
 
 let backendProcess: ChildProcess | null = null;
 
-function getPythonPath(): string {
-  const isWindows = process.platform === 'win32';
+function getBackendLaunch(): { bin: string; args: string[]; cwd: string } {
+  if (app.isPackaged) {
+    // PyInstaller one-folder bundle shipped via extraResources
+    const base = join(process.resourcesPath, 'backend');
+    const bin = process.platform === 'win32'
+      ? join(base, 'woxus-backend.exe')
+      : join(base, 'woxus-backend');
+    return { bin, args: [], cwd: base };
+  }
   const base = join(__dirname, '..', '..', 'backend');
-  return isWindows
+  const pythonPath = process.platform === 'win32'
     ? join(base, '.venv', 'Scripts', 'python.exe')
     : join(base, '.venv', 'bin', 'python');
+  return {
+    bin: pythonPath,
+    args: ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8000'],
+    cwd: join(__dirname, '..', '..'),
+  };
 }
 
 export class BackendManager {
@@ -45,14 +58,20 @@ export class BackendManager {
       return;
     }
 
-    const pythonPath = getPythonPath();
-    console.log('[BackendManager] Starting Python backend...', { pythonPath });
+    const { bin, args, cwd } = getBackendLaunch();
+    console.log('[BackendManager] Starting backend...', { bin, cwd });
 
     try {
-      backendProcess = spawn(pythonPath, ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8000'], {
-        cwd: join(__dirname, '..', '..'),
+      backendProcess = spawn(bin, args, {
+        cwd,
         stdio: ['ignore', 'inherit', 'inherit'],
-        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: '1',
+          // Packaged apps have no .env — inject keys persisted in settings
+          GEMINI_API_KEY: settingsStore.getApiKey() || process.env.GEMINI_API_KEY || '',
+          GEMINI_MODEL: settingsStore.getGeminiModel() || process.env.GEMINI_MODEL || '',
+        },
       });
 
       backendProcess.on('error', (err) => {

@@ -23,7 +23,6 @@
 *.py[cod]
 *.pyd
 *.so
-*.spec
 *.sqlite
 *.sqlite-journal
 *.swo

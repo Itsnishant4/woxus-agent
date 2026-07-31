@@ -333,6 +333,17 @@ ipcMain.handle('set-global-hotkey', (_event, hotkey: string) => {
   settingsStore.setGlobalHotkey(hotkey);
   registerGlobalHotkey();
 });
+
+ipcMain.handle('get-api-key', () => settingsStore.getApiKey());
+ipcMain.handle('set-api-key', (_event, key: string) => {
+  settingsStore.setApiKey(String(key));
+  return settingsStore.getApiKey();
+});
+ipcMain.handle('get-gemini-model', () => settingsStore.getGeminiModel());
+ipcMain.handle('set-gemini-model', (_event, model: string) => {
+  settingsStore.setGeminiModel(String(model));
+  return settingsStore.getGeminiModel();
+});
 ipcMain.on('hide-overlay', () => {
   overlayWindow?.hide();
 });

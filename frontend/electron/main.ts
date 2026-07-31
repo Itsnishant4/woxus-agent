@@ -201,7 +201,7 @@ function registerGlobalHotkey() {
 function createTray() {
   let icon: NativeImage;
   if (process.platform === 'darwin') {
-    icon = nativeImage.createFromPath(iconPath('icon-transparent.png')).resize({ width: 22, height: 22 });
+    icon = nativeImage.createFromPath(iconPath('tray-icon-32.png'));
   } else {
     icon = nativeImage.createFromPath(iconPath('tray', 'tray-icon-32.png'));
   }

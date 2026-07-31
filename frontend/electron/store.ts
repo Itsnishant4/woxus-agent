@@ -17,6 +17,7 @@ export interface CachedTrial {
 const store = new Store({
   defaults: {
     launchAtLogin: false,
+    globalHotkey: 'CommandOrControl+Shift+P',
     licenseKey: '',
     trialEmail: '',
     trialStartedAt: 0,
@@ -25,6 +26,7 @@ const store = new Store({
   },
   schema: {
     launchAtLogin: { type: 'boolean', default: false },
+    globalHotkey: { type: 'string', default: 'CommandOrControl+Shift+P' },
     licenseKey: { type: 'string', default: '' },
     trialEmail: { type: 'string', default: '' },
     trialStartedAt: { type: 'number', default: 0 },
@@ -36,6 +38,9 @@ const store = new Store({
 export const settingsStore = {
   getLaunchAtLogin: (): boolean => store.get('launchAtLogin') as boolean,
   setLaunchAtLogin: (value: boolean): void => store.set('launchAtLogin', value),
+
+  getGlobalHotkey: (): string => store.get('globalHotkey') as string,
+  setGlobalHotkey: (value: string): void => store.set('globalHotkey', value),
 
   getLicenseKey: (): string => store.get('licenseKey') as string,
   setLicenseKey: (key: string): void => store.set('licenseKey', key),

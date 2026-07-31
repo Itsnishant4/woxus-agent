@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
@@ -18,6 +18,7 @@ function iconPath(...segments: string[]): string {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let overlayWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
@@ -80,6 +81,53 @@ function createWindow() {
     mainWindow.loadFile(join(__dirname, '../dist/index.html'));
   }
 }
+
+function createOverlayWindow() {
+  overlayWindow = new BrowserWindow({
+    width: 650,
+    height: 400,
+    alwaysOnTop: true,
+    frame: false,
+    transparent: true,
+    skipTaskbar: true,
+    show: false,
+    resizable: false,
+    webPreferences: {
+      preload: join(__dirname, 'preload.js'),
+      sandbox: false,
+    },
+  });
+
+  overlayWindow.on('blur', () => {
+    overlayWindow?.hide();
+  });
+
+  if (VITE_DEV_SERVER_URL) {
+    overlayWindow.loadURL(VITE_DEV_SERVER_URL + '#/overlay');
+  } else {
+    overlayWindow.loadFile(join(__dirname, '../dist/index.html'), { hash: '/overlay' });
+  }
+}
+
+function registerGlobalHotkey() {
+  globalShortcut.unregisterAll();
+  const hotkey = settingsStore.getGlobalHotkey() || 'CommandOrControl+Shift+P';
+  try {
+    globalShortcut.register(hotkey, () => {
+      if (overlayWindow) {
+        if (overlayWindow.isVisible()) {
+          overlayWindow.hide();
+        } else {
+          overlayWindow.show();
+          overlayWindow.focus();
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Failed to register global hotkey:', err);
+  }
+}
+
 
 function createTray() {
   const trayIconFile = process.platform === 'darwin' ? 'tray-icon.png' : 'tray-icon-32.png';
@@ -145,7 +193,9 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  createOverlayWindow();
   createTray();
+  registerGlobalHotkey();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -171,6 +221,10 @@ app.on('before-quit', () => {
   }
 });
 
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
+
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('get-auto-launch', () => {
@@ -187,6 +241,15 @@ ipcMain.handle('set-auto-launch', (_event, enable: boolean) => {
     app.setLoginItemSettings({ openAtLogin: false });
   }
   return settingsStore.getLaunchAtLogin();
+});
+
+ipcMain.handle('get-global-hotkey', () => settingsStore.getGlobalHotkey());
+ipcMain.handle('set-global-hotkey', (_event, hotkey: string) => {
+  settingsStore.setGlobalHotkey(hotkey);
+  registerGlobalHotkey();
+});
+ipcMain.on('hide-overlay', () => {
+  overlayWindow?.hide();
 });
 
 // License IPC handlers

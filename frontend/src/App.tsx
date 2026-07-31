@@ -120,17 +120,22 @@ export default function App() {
   const location = useLocation();
 
   const checkModelStatus = useCallback(async () => {
-    try {
-      const res = await window.fetch(`${API_BASE}/model/status`);
-      const data = await res.json();
-      if (data.installed) {
-        setModelReady(true);
-      } else {
-        setModelReady(false);
+    let attempts = 0;
+    while (attempts < 20) {
+      try {
+        const res = await window.fetch(`${API_BASE}/model/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setModelReady(Boolean(data.installed));
+          return;
+        }
+      } catch {
+        // backend not up yet — retry
       }
-    } catch {
-      setModelReady(false);
+      attempts += 1;
+      await new Promise((r) => setTimeout(r, 1000));
     }
+    setModelReady(false);
   }, []);
 
   useEffect(() => {

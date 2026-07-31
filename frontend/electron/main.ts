@@ -200,7 +200,7 @@ function registerGlobalHotkey() {
 
 function createTray() {
   const trayIconFile = process.platform === 'darwin' ? 'tray-icon.png' : 'tray-icon-32.png';
-  let icon = nativeImage.createFromPath(iconPath(trayIconFile));
+  let icon = nativeImage.createFromPath(iconPath('tray', trayIconFile));
   if (process.platform === 'darwin') {
     icon = icon.resize({ width: 22, height: 22 });
     icon.setTemplateImage(true);

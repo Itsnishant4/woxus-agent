@@ -381,7 +381,7 @@ woxus/
 
 Goal: updater running → backend ships → combined installer → mac signed → release automation.
 
-### Phase 1 — #13 Auto-update (electron-updater) — IN PROGRESS
+### Phase 1 — #13 Auto-update (electron-updater) — CODE DONE, RELEASE E2E PENDING
 - [x] `npm i electron-updater` (regular dep)
 - [x] `electron-builder.yml`: `publish: {provider: github, owner: Itsnishant4, repo: woxus-agent, token: ${env.GH_TOKEN}}`; mac adds `zip` target (updater needs latest-mac.yml + blockmap)
 - [x] `frontend/electron/updaterService.ts` (new): init only packaged or `--update-dev`; macOS gated behind signing flag; autoDownload; events → `update:status` IPC (checking/available/progress/downloaded/none/error); `installUpdate()` → `quitAndInstall()` (backend stops via before-quit); silent check 10s post-ready
@@ -393,13 +393,13 @@ Goal: updater running → backend ships → combined installer → mac signed �
 - [ ] GitHub release E2E: real tag → fresh install old version → auto-update to new
 
 ### Phase 2 — #31 PyInstaller backend bundling
-- [ ] Relocate `DATA_DIR` (license.py, memory_engine.py, trial_tracker.py) to `~/.woxus/data` — **prevents data wipe on update**
-- [ ] `backend/woxus_backend.spec`: one-folder; hidden imports llama_cpp / ctranslate2 / faster_whisper; exclude dev junk
-- [ ] CI pyinstaller job per OS (mac/win/ubuntu) → backend-dist artifact
-- [ ] `electron-builder.yml`: `extraResources: backend-dist`
-- [ ] `backendManager.ts`: packaged mode spawns bundled binary (`.exe` on win), passes GEMINI_API_KEY / GEMINI_MODEL / WOXUS_DATA_DIR
-- [ ] SettingsPage API key field → electron-store → backend env (packaged apps have no .env)
-- [ ] Verify per OS: backend boots, license+memory persist across reinstall, prompt writer works
+- [ ] Relocate `DATA_DIR` (license.py, memory_engine.py, trial_tracker.py) to `~/.woxus/data` — **prevents data wipe on update** → [x] DONE — `backend/paths.py` (`woxus_data_dir()`, `WOXUS_DATA_DIR` override); license/memory/trial/config all relocated
+- [ ] `backend/woxus_backend.spec`: one-folder; hidden imports llama_cpp / ctranslate2 / faster_whisper; exclude dev junk → [x] DONE — spec at `backend/woxus_backend.spec`, 207MB build, frozen binary boots + serves + persists (macOS verified)
+- [ ] CI pyinstaller job per OS (mac/win/ubuntu) → backend-dist artifact → [x] DONE — `release.yml` `build-backend` matrix job; artifacts consumed by release job
+- [ ] `electron-builder.yml`: `extraResources: backend-dist` → [x] DONE — `../backend/dist/woxus-backend` → `resources/backend`
+- [ ] `backendManager.ts`: packaged mode spawns bundled binary (`.exe` on win), passes GEMINI_API_KEY / GEMINI_MODEL / WOXUS_DATA_DIR → [x] DONE — packaged spawn w/ env injection; dev path unchanged
+- [ ] SettingsPage API key field → electron-store → backend env (packaged apps have no .env) → [x] DONE — ApiKeySection (password input + model), store schema, IPC
+- [ ] Verify per OS: backend boots, license+memory persist across reinstall, prompt writer works → [ ] macOS packaged E2E done (boot, health, trials.json in ~/.woxus/data); Windows/Linux CI-run pending
 
 ### Phase 3 — #32 Combined installer
 - [ ] Confirm DMG/NSIS/AppImage carry backend via extraResources (no separate artifact needed)

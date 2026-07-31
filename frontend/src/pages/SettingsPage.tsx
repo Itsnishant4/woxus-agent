@@ -190,77 +190,6 @@ function UpdateSection() {
   );
 }
 
-function ApiKeySection() {
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('');
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    // @ts-ignore
-    if (window.electronAPI?.getApiKey) {
-      // @ts-ignore
-      window.electronAPI.getApiKey().then((k: string) => setApiKey(k || ''));
-    }
-    // @ts-ignore
-    if (window.electronAPI?.getGeminiModel) {
-      // @ts-ignore
-      window.electronAPI.getGeminiModel().then((m: string) => setModel(m || ''));
-    }
-  }, []);
-
-  const save = async () => {
-    // @ts-ignore
-    if (window.electronAPI?.setApiKey) {
-      // @ts-ignore
-      await window.electronAPI.setApiKey(apiKey.trim());
-    }
-    // @ts-ignore
-    if (window.electronAPI?.setGeminiModel) {
-      // @ts-ignore
-      await window.electronAPI.setGeminiModel(model.trim());
-    }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label htmlFor="api-key" className="text-sm font-medium text-foreground">Gemini API Key</label>
-        <p className="text-xs text-muted-foreground">Required for AI features in the packaged app (no .env)</p>
-      </div>
-      <input
-        type="password"
-        id="api-key"
-        value={apiKey}
-        onChange={(e) => setApiKey(e.target.value)}
-        placeholder="AIza..."
-        className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
-      />
-      <div>
-        <label htmlFor="gemini-model" className="text-sm font-medium text-foreground">Model</label>
-        <p className="text-xs text-muted-foreground">Comma-separated list (leave empty for default)</p>
-      </div>
-      <input
-        type="text"
-        id="gemini-model"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        placeholder="gemini-2.5-flash-native-audio-preview-12-2025,gemini-2.0-flash-live-preview"
-        className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
-      />
-      <div className="flex items-center gap-3">
-        <button
-          onClick={save}
-          className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all"
-        >
-          Save
-        </button>
-        {saved && <span className="text-xs text-emerald-600">Saved</span>}
-      </div>
-    </div>
-  );
-}
 function AboutSection() {
   const [version, setVersion] = useState('');
   useEffect(() => {
@@ -319,7 +248,7 @@ const sections = [
     title: 'Privacy & Security',
     description: 'Manage your data and permissions',
     icon: Shield,
-    content: <ApiKeySection />,
+    content: <p className="text-sm text-muted-foreground">All data stored locally. No data shared without your consent.</p>,
   },
   {
     id: 'updates',

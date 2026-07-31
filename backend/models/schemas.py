@@ -109,6 +109,7 @@ class LicenseVerifyResponse(BaseModel):
     expiry: Optional[str] = None
     features: list[str] = []
     reason: Optional[str] = None
+    offline: Optional[bool] = None
 
 
 class TrialStartRequest(BaseModel):

@@ -36,6 +36,7 @@ export function getHardwareId(): string {
 export async function verifyLicense(licenseKey: string): Promise<{
   valid: boolean;
   reason?: string;
+  offline?: boolean;
   cached?: boolean;
 }> {
   const hwid = getHardwareId();
@@ -51,13 +52,13 @@ export async function verifyLicense(licenseKey: string): Promise<{
       settingsStore.setCachedLicenseStatus({
         valid: true,
         license_key: licenseKey,
-        expires_at: data.expires_at || '',
+        expires_at: data.expiry || data.expires_at || '',
         hardware_id: hwid,
       });
     }
-    return { valid: data.valid, reason: data.reason };
+    return { valid: data.valid, reason: data.reason, offline: data.offline };
   } catch {
-    return { valid: false, reason: 'Could not reach license server' };
+    return { valid: false, reason: 'Could not reach license server', offline: true };
   }
 }
 
@@ -100,14 +101,16 @@ export async function getLicenseStatus(): Promise<{
         settingsStore.setCachedLicenseStatus({
           valid: true,
           license_key: storedKey,
-          expires_at: data.expires_at || '',
+          expires_at: data.expiry || data.expires_at || '',
           hardware_id: hwid,
         });
         return { status: 'licensed', licenseKey: storedKey };
       }
-      // Key invalid — clear cache
-      settingsStore.setLicenseKey('');
-      settingsStore.setCachedLicenseStatus(null);
+      // Key genuinely invalid — clear cache. Offline (server unreachable) keeps cache.
+      if (!data.offline) {
+        settingsStore.setLicenseKey('');
+        settingsStore.setCachedLicenseStatus(null);
+      }
     } catch { /* offline — continue to trial check */ }
   }
 

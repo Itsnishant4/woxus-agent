@@ -10,9 +10,10 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ..config import get_api_key
 from ..services.gemini_live import GeminiLiveService
-from ..services.tool_definitions import agent_tools
 from ..services.memory_engine import list_memories
+from ..services.tool_definitions import agent_tools
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -65,7 +66,9 @@ async def gemini_live_websocket(websocket: WebSocket):
             logger.debug("Failed to send latency log")
 
     config = websocket.app.state.config
-    gemini_api_key = config.get("GEMINI_API_KEY")
+    gemini_api_key = get_api_key()
+    if not gemini_api_key or gemini_api_key == "YOUR_GEMINI_API_KEY":
+        gemini_api_key = config.get("GEMINI_API_KEY", "")
     gemini_models = ["gemini-2.5-flash-native-audio-preview-12-2025"]
     logger.info("Available Gemini Live models: %s", gemini_models)
 

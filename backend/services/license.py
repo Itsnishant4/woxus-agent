@@ -1,9 +1,9 @@
 import json
 import logging
 import os
+import urllib.request
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional
 
 import pymongo
 
@@ -15,6 +15,8 @@ DATA_DIR = woxus_data_dir()
 LICENSE_FILE = DATA_DIR / "licenses.json"
 
 _mongo_client = None
+
+LICENSE_SERVER_TIMEOUT_SECONDS = 6
 
 def _get_mongo_collection():
     global _mongo_client
@@ -47,7 +49,53 @@ def _save_licenses(licenses: list[dict]):
     LICENSE_FILE.write_text(json.dumps(licenses, indent=2))
 
 
-def generate_key(expiry_days: int = 365, features: Optional[list[str]] = None) -> dict:
+def _verify_remote(license_key: str, hardware_id: str) -> dict | None:
+    """Verify against deployed admin panel. Returns None when unreachable."""
+    server = os.getenv("LICENSE_SERVER_URL", "https://woxus-admin.vercel.app")
+    if not server:
+        return None
+    try:
+        req = urllib.request.Request(
+            server.rstrip("/") + "/api/verify-key",
+            data=json.dumps({"license_key": license_key, "hardware_id": hardware_id}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=LICENSE_SERVER_TIMEOUT_SECONDS) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        logger.warning("License server unreachable: %s", e)
+        return None
+
+
+def _cache_remote_license(result: dict, license_key: str, hardware_id: str):
+    """Persist a server-verified license locally so it works when admin panel is down."""
+    if not result.get("valid"):
+        return
+    licenses = _load_licenses()
+    for lic in licenses:
+        if lic["key"] == license_key:
+            hw_ids = lic.setdefault("hardware_ids", [])
+            if hardware_id not in hw_ids:
+                hw_ids.append(hardware_id)
+            lic["expiry"] = result.get("expiry")
+            lic["features"] = result.get("features") or ["all"]
+            _save_licenses(licenses)
+            return
+    licenses.append({
+        "key": license_key,
+        "expiry": result.get("expiry"),
+        "features": result.get("features") or ["all"],
+        "hardware_ids": [hardware_id],
+        "max_activations": 99,
+        "revoked": False,
+        "created_at": datetime.utcnow().isoformat(),
+        "cached_from_server": True,
+    })
+    _save_licenses(licenses)
+
+
+def generate_key(expiry_days: int = 365, features: list[str] | None = None) -> dict:
     key = f"WOX-{uuid.uuid4().hex[:12].upper()}"
     record = {
         "key": key,
@@ -86,7 +134,19 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
             "features": lic.get("features", []),
         }
 
-    # Fallback: check MongoDB (admin-generated keys)
+    # Fallback: remote admin panel (deployed license server)
+    remote = _verify_remote(license_key, hardware_id)
+    if remote is not None:
+        if remote.get("valid"):
+            _cache_remote_license(remote, license_key, hardware_id)
+            return {
+                "valid": True,
+                "expiry": remote.get("expiry"),
+                "features": remote.get("features") or ["all"],
+            }
+        return {"valid": False, "reason": remote.get("reason", "Invalid license key")}
+
+    # Fallback: direct MongoDB (admin-generated keys, dev only)
     col = _get_mongo_collection()
     if col is not None:
         try:
@@ -115,4 +175,5 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
         except Exception as e:
             logger.warning(f"MongoDB license check failed: {e}")
 
-    return {"valid": False, "reason": "Invalid license key"}
+    # Server unreachable and nothing verified locally — never grant unverified access
+    return {"valid": False, "reason": "License server unreachable — could not verify key", "offline": True}

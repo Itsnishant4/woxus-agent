@@ -21,7 +21,7 @@ def _get_mongo_collection():
         return None
     try:
         if _mongo_client is None:
-            _mongo_client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
+            _mongo_client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=800)
         return _mongo_client.get_database()["licenses"]
     except Exception:
         return None
@@ -110,7 +110,7 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
                     "expiry": expiry_str,
                     "features": doc.get("features", ["all"]),
                 }
-        except Exception:
-            logger.warning("MongoDB license check failed", exc_info=True)
+        except Exception as e:
+            logger.warning(f"MongoDB license check failed: {e}")
 
     return {"valid": False, "reason": "Invalid license key"}

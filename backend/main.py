@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import chat, memory, settings, system, voice, terminal, notes, license, trial, feedback, tasks, overlay
+from .routes import chat, memory, settings, system, voice, terminal, notes, license, trial, feedback, tasks, model, overlay
 from .config import load_config
 from .middleware import license_check_middleware, trial_limiter_middleware
 
@@ -15,9 +15,14 @@ from .middleware import license_check_middleware, trial_limiter_middleware
 async def lifespan(app: FastAPI):
     config = load_config()
     app.state.config = config
+    log_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "woxus.log"))
+    file_handler = logging.FileHandler(log_file_path, mode="a", encoding="utf-8")
+    stream_handler = logging.StreamHandler()
     logging.basicConfig(
         level=getattr(logging, config.get("LOG_LEVEL", "INFO")),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[file_handler, stream_handler],
+        force=True,
     )
     logging.info("Woxus backend starting…")
     yield
@@ -52,6 +57,7 @@ app.include_router(license.router, prefix="/api/license", tags=["license"])
 app.include_router(trial.router, prefix="/api/trial", tags=["trial"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(model.router, prefix="/api/model", tags=["model"])
 app.include_router(overlay.router, prefix="/api/overlay", tags=["overlay"])
 
 

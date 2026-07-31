@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import Any, Optional
 
 from .memory_engine import create_memory, list_memories, delete_memory as delete_memory_svc
@@ -48,7 +49,11 @@ async def handle_tool_call(name: str, args: dict) -> dict:
     logger.info("Tool call: %s args=%s", name, args)
 
     try:
-        if name == "terminal_exec":
+        if name == "delegate_task_to_mini_agent":
+            task_prompt = args.get("task_prompt", "")
+            from .local_model import run_local_mini_agent
+            return await run_local_mini_agent(task_prompt)
+        elif name == "terminal_exec":
             return await _terminal_exec(args)
         elif name == "terminal_status":
             return _terminal_status(args)
@@ -77,16 +82,18 @@ async def handle_tool_call(name: str, args: dict) -> dict:
 
 async def _terminal_exec(args: dict) -> dict:
     command = args["command"]
-    background = args.get("background", False)
+    background = args.get("background", True)
     timeout = min(args.get("timeout_seconds", 30), 600)
 
     danger = _check_dangerous(command)
     if danger:
         return {"error": danger}
 
+    # Register EVERY command in task_manager so it appears live in the Tasks UI!
+    tm = get_task_manager()
+    task = await tm.start(command)
+
     if background:
-        tm = get_task_manager()
-        task = await tm.start(command)
         return {
             "task_id": task.task_id,
             "state": "running",
@@ -94,39 +101,31 @@ async def _terminal_exec(args: dict) -> dict:
             "command": command,
         }
 
-    # Foreground execution with timeout
-    # Pipe "y\n" to handle interactive prompts automatically
-    proc = await asyncio.create_subprocess_shell(
-        command,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=os.path.expanduser("~"),
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(input=b"y\n"), timeout=timeout
-        )
-        return {
-            "exit_code": proc.returncode,
-            "stdout": stdout.decode("utf-8", errors="replace"),
-            "stderr": stderr.decode("utf-8", errors="replace"),
-            "timed_out": False,
-        }
-    except asyncio.TimeoutError:
-        proc.terminate()
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=5)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-        return {
-            "exit_code": -1,
-            "stdout": "",
-            "stderr": f"Command timed out after {timeout}s. "
-                      f"Try again with background=true.",
-            "timed_out": True,
-        }
+    # Foreground execution: Wait for task to finish while streaming logs to task_manager
+    start_t = time.time()
+    while task.state == "running":
+        if (time.time() - start_t) > timeout:
+            return {
+                "exit_code": -1,
+                "stdout": task.stdout,
+                "stderr": task.stderr + f"\nTimed out after {timeout} seconds.",
+                "timed_out": True,
+            }
+        await asyncio.sleep(0.2)
+
+    return {
+        "exit_code": task.exit_code,
+        "stdout": task.stdout,
+        "stderr": task.stderr,
+        "timed_out": False,
+        "healed": task.state == "done" and "Auto-Healed" in task.stdout,
+    }
+
+
+async def _execute_tool_raw(name: str, args: dict) -> dict:
+    """Execute tool directly without triggering recursive mini-agent loops."""
+    args["_from_mini_agent"] = True
+    return await handle_tool_call(name, args)
 
 
 def _terminal_status(args: dict) -> dict:

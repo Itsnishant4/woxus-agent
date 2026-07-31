@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await connectDB();
+  await License.updateMany({ maxActivations: { $ne: 1 } }, { $set: { maxActivations: 1 } });
+
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") || "";
   const page = parseInt(searchParams.get("page") || "1");

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useVoiceStore } from '../store/voice';
 import { startVoiceSession, stopVoiceSession } from '../services/voice';
 import { Loader2, Terminal } from 'lucide-react';
+import ModelDownloadBanner from '../components/ModelDownloadBanner';
 
 interface Task {
   task_id: string;
@@ -16,7 +17,7 @@ interface Task {
 const API = '/api';
 
 export default function HomePage() {
-  const { connected, isListening } = useVoiceStore();
+  const { connected, isListening, sttStatus } = useVoiceStore();
   const [error, setError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
 
@@ -50,6 +51,7 @@ export default function HomePage() {
 
   return (
     <div className="flex h-full flex-col">
+      <ModelDownloadBanner />
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-6">
           <button
@@ -92,6 +94,18 @@ export default function HomePage() {
               {active ? 'Speak now' : error || 'Click the orb to start'}
             </p>
           </div>
+
+          {sttStatus === 'downloading' && (
+            <div className="flex flex-col items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-300">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-accent/50 border border-border/60">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-500" />
+                <span className="text-xs text-foreground/80">Downloading speech model (~75 MB, once)…</span>
+              </div>
+              <div className="w-56 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 animate-pulse w-full" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

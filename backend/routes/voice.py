@@ -26,7 +26,7 @@ async def gemini_live_websocket(websocket: WebSocket):
 
     audio_input_queue: asyncio.Queue[bytes] = asyncio.Queue()
     video_input_queue: asyncio.Queue[bytes] = asyncio.Queue()
-    text_input_queue: asyncio.Queue[str] = asyncio.Queue()
+    text_input_queue: asyncio.Queue = asyncio.Queue()
 
     async def audio_output_callback(data: bytes):
         """Relay Gemini audio response back to frontend."""
@@ -50,19 +50,24 @@ async def gemini_live_websocket(websocket: WebSocket):
         except Exception:
             logger.debug("Failed to send transcription")
 
+    async def latency_callback(user_text: str, latency_ms: float):
+        """Send response latency log to frontend for UI/console display."""
+        try:
+            latency_sec = round(latency_ms / 1000, 2)
+            logger.info("⏱️ [LATENCY] Response to '%s' took %.2f ms (%.2f s)", user_text[:60], latency_ms, latency_sec)
+            await websocket.send_json({
+                "type": "latency_log",
+                "user_text": user_text,
+                "latency_ms": round(latency_ms, 2),
+                "latency_sec": latency_sec,
+            })
+        except Exception:
+            logger.debug("Failed to send latency log")
+
     config = websocket.app.state.config
     gemini_api_key = config.get("GEMINI_API_KEY")
-    gemini_model = config.get("GEMINI_MODEL", "")
-    # User-configured model(s) first, then fallback list
-    user_models = [m.strip() for m in gemini_model.split(",") if m.strip()]
-    fallbacks = [
-        "gemini-2.5-flash-native-audio-preview-12-2025",
-        "gemini-2.0-flash-live-preview",
-        "gemini-3.1-flash-live-preview",
-        "gemini-3.0-flash-live-preview",
-    ]
-    gemini_models = user_models + [m for m in fallbacks if m not in user_models]
-    logger.info("Available Gemini models: %s", gemini_models)
+    gemini_models = ["gemini-2.5-flash-native-audio-preview-12-2025"]
+    logger.info("Available Gemini Live models: %s", gemini_models)
 
     if not gemini_api_key:
         await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY not configured"})
@@ -71,12 +76,40 @@ async def gemini_live_websocket(websocket: WebSocket):
 
     memories = list_memories()
     mem_lines = "\n".join(f"- {m['content']}" for m in memories) if memories else "None yet."
+
+    # Warm up the local whisper model for voice-turn history capture and
+    # surface the one-time model download to the UI (fire-and-forget so it
+    # never blocks session teardown).
+    stt_warmup_started = False
+
+    async def warmup_stt():
+        nonlocal stt_warmup_started
+        if stt_warmup_started:
+            return
+        stt_warmup_started = True
+        try:
+            from ..services.stt import _get_model, is_model_ready
+            if not is_model_ready():
+                logger.info("🎙️ [STT] Model not cached — notifying frontend of download")
+                await websocket.send_json({
+                    "type": "stt_downloading",
+                    "message": "Downloading speech recognition model (~75 MB, once)",
+                })
+            model = await asyncio.to_thread(_get_model)
+            if model is not None:
+                await websocket.send_json({"type": "stt_ready"})
+        except Exception as e:
+            logger.error("🎙️ [STT] Warmup failed: %s", e)
+
+    asyncio.get_running_loop().create_task(warmup_stt())
+
     system_instruction = (
-        "You are Woxus, a desktop AI agent.\n\n"
-        "RULES:\n"
-        "- Output is shown in chat AND spoken as audio. Keep it under 10 words.\n"
-        "- No markdown, bold, headings, or descriptions of your actions.\n"
-        "- Use stored memories to personalize responses. Never ask to search memories.\n\n"
+        "You are Woxus Main Agent.\n\n"
+        "CONVERSATIONAL WORKFLOW RULES:\n"
+        "1. FIRST RESPONSE: When the user asks a question or gives a command, speak a short acknowledgment FIRST (e.g. 'Wait, I am checking your Desktop now.' or 'Creating that for you now.').\n"
+        "2. TOOL DELEGATION: Call `delegate_task_to_mini_agent(task_prompt='...')` to run the task via the Local Mini Agent.\n"
+        "3. SECOND RESPONSE: After the Local Mini Agent completes and returns the output, speak the final result clearly (e.g. 'Your Desktop has folders woxus-core, projects, and notes.').\n"
+        "4. Keep spoken responses natural, clear, and conversational. Do NOT use markdown, bold, or headings.\n\n"
         f"STORED MEMORIES:\n{mem_lines}"
     )
 
@@ -105,10 +138,13 @@ async def gemini_live_websocket(websocket: WebSocket):
                             image_data = base64.b64decode(payload["data"])
                             await video_input_queue.put(image_data)
                             continue
+                        # Frontend wraps plain text as {"text": "..."}; unwrap it
+                        if isinstance(payload, dict) and payload.get("text"):
+                            text = payload["text"]
                     except json.JSONDecodeError:
                         pass
 
-                    await text_input_queue.put(text)
+                    await text_input_queue.put(("text", text))
 
         except WebSocketDisconnect:
             logger.info("Frontend WebSocket disconnected")
@@ -126,6 +162,7 @@ async def gemini_live_websocket(websocket: WebSocket):
                 audio_output_callback=audio_output_callback,
                 audio_interrupt_callback=audio_interrupt_callback,
                 transcription_callback=transcription_callback,
+                latency_callback=latency_callback,
             ),
         )
     except Exception as e:
@@ -136,3 +173,12 @@ async def gemini_live_websocket(websocket: WebSocket):
             pass
     finally:
         gemini_client.stop()
+        if gemini_client._session_error:
+            logger.error("Voice session ended with error: %s", gemini_client._session_error[:300])
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Voice session ended: {gemini_client._session_error[:300]}",
+                })
+            except Exception:
+                pass

@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, Separator } from "@heroui/react";
 import { Key, Clock, ExternalLink, Star, Send, AlertCircle, CheckCircle, MessageCircle } from "lucide-react";
 import { toast } from "@/components/Toast";
 
@@ -18,11 +17,11 @@ export default function LicensePage({ onActivated }: Props) {
   const [licenseError, setLicenseError] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-const [trialSec, setTrialSec] = useState(0);
-const [trialTotal, setTrialTotal] = useState(600);
-const [startingTrial, setStartingTrial] = useState(false);
-const [trialEmail, setTrialEmail] = useState("");
-const [trialExpired, setTrialExpired] = useState(false);
+  const [trialSec, setTrialSec] = useState(0);
+  const [trialTotal, setTrialTotal] = useState(600);
+  const [startingTrial, setStartingTrial] = useState(false);
+  const [trialEmail, setTrialEmail] = useState("");
+  const [trialExpired, setTrialExpired] = useState(false);
 
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
@@ -138,75 +137,72 @@ const [trialExpired, setTrialExpired] = useState(false);
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
+  const inputCls =
+    "w-full px-3.5 py-2.5 rounded-lg border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground/60 focus:bg-card focus:border-ring focus:ring-2 focus:ring-ring/10 transition-all outline-none";
+  const primaryBtnCls =
+    "inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium shadow-sm transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0";
+  const cardCls =
+    "bg-card border border-border rounded-xl p-6 shadow-sm hover:border-muted-foreground/25 transition-all space-y-4 animate-fade-in";
+
   if (state === "loading") {
     return (
-      <div className="max-w-lg mx-auto px-6 py-12">
-        <Card className="border-border/60 shadow-sm">
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            Checking license status...
-          </CardContent>
-        </Card>
+      <div className="max-w-2xl mx-auto px-6 py-12">
+        <div className="bg-card border border-border rounded-xl p-12 text-center shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground animate-pulse">Checking license status...</p>
+        </div>
       </div>
     );
   }
 
   if (state === "licensed") {
     return (
-      <div className="max-w-lg mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">License</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your license status</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">License</h1>
+          <p className="text-sm text-muted-foreground font-medium mt-1">Your license status and details</p>
         </div>
-        <Separator />
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <CardTitle>Active</CardTitle>
-                <CardDescription>Your license is active</CardDescription>
-              </div>
+        <div className="h-px bg-border w-full" />
+        <div className={cardCls}>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <CheckCircle className="h-5 w-5" />
             </div>
-          </CardHeader>
-        </Card>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">License Active</h2>
+              <p className="text-xs text-muted-foreground font-medium">Your license is valid and active on this device</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (trialExpired) {
     return (
-      <div className="max-w-lg mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-2xl mx-auto px-6 py-8 space-y-6">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">License</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your free trial has ended</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">License</h1>
+          <p className="text-sm text-muted-foreground font-medium mt-1">Your free trial has ended</p>
         </div>
-        <Separator />
-        <Card className="border-destructive/50 border-2 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <CardTitle>Trial Expired</CardTitle>
-                <CardDescription>Purchase a license to continue using Woxus</CardDescription>
-              </div>
+        <div className="h-px bg-border w-full" />
+        <div className="bg-card border-2 border-destructive/30 rounded-xl p-6 shadow-sm space-y-5 text-center animate-fade-in">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-12 h-12 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive">
+              <AlertCircle className="h-6 w-6" />
             </div>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4 pb-6">
-            <a
-              href={BUY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Buy License
-            </a>
-          </CardContent>
-        </Card>
+            <h2 className="text-lg font-bold text-foreground">Free Trial Expired</h2>
+            <p className="text-sm text-muted-foreground max-w-sm">Your 10-minute trial has finished. Purchase a license to continue using Woxus.</p>
+          </div>
+          <a
+            href={BUY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={primaryBtnCls}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Buy License Key
+          </a>
+        </div>
       </div>
     );
   }
@@ -214,28 +210,26 @@ const [trialExpired, setTrialExpired] = useState(false);
   return (
     <div className="max-w-lg mx-auto px-6 py-8 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">License</h1>
-        <p className="text-sm text-muted-foreground mt-1">Activate Woxus with a license key or start a free trial</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">License</h1>
+        <p className="text-sm text-muted-foreground font-medium mt-1">Activate Woxus with a license key or start a free trial</p>
       </div>
-      <Separator />
+      <div className="h-px bg-border w-full" />
 
       {state === "trial" && (
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-amber-500" />
-              </div>
-              <div>
-                <CardTitle>Free Trial</CardTitle>
-                <CardDescription>
-                  {trialEmail ? `Trial for ${trialEmail}` : "Trial in progress"}
-                </CardDescription>
-              </div>
+        <div className={cardCls}>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <Clock className="h-5 w-5" />
             </div>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-3 pb-6">
-            <div className="text-4xl font-mono font-bold tracking-wider">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Free Trial Active</h2>
+              <p className="text-xs text-muted-foreground font-medium">
+                {trialEmail ? `Trial registered for ${trialEmail}` : "10-minute trial access in progress"}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <div className="text-4xl font-mono font-bold tracking-wider text-foreground tabular-nums">
               {formatTime(trialSec)}
             </div>
             <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
@@ -244,45 +238,43 @@ const [trialExpired, setTrialExpired] = useState(false);
                 style={{ width: `${(trialSec / trialTotal) * 100}%` }}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground text-center font-medium">
               {trialSec > 300
-                ? "Enjoying Woxus? Buy a license to support development."
-                : "Your trial is ending soon! Purchase a license to continue."}
+                ? "Enjoying Woxus? Buy a license to unlock full unlimited access."
+                : "Your trial is ending soon! Purchase a license to keep using Woxus."}
             </p>
             <a
               href={BUY_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity"
+              className={primaryBtnCls + " mt-1"}
             >
               <ExternalLink className="h-4 w-4" />
-              Buy License
+              Buy License Key
             </a>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {state === "trial" && !feedbackSent && (
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <MessageCircle className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Feedback</CardTitle>
-                <CardDescription>Help us improve Woxus</CardDescription>
-              </div>
+        <div className={cardCls}>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center text-foreground shrink-0">
+              <MessageCircle className="h-5 w-5" />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pb-6">
-            <div className="flex items-center gap-1">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Share Feedback</h2>
+              <p className="text-xs text-muted-foreground font-medium">Help us improve Woxus during your trial</p>
+            </div>
+          </div>
+          <div className="space-y-4 pt-1">
+            <div className="flex items-center gap-1.5">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
                   onClick={() => setFeedbackRating(star)}
-                  className={`p-1 rounded transition-colors ${
-                    star <= feedbackRating ? "text-amber-500" : "text-muted hover:text-muted-foreground"
+                  className={`p-1.5 rounded-md transition-colors ${
+                    star <= feedbackRating ? "text-amber-500" : "text-muted-foreground/30 hover:text-muted-foreground/60"
                   }`}
                 >
                   <Star className="h-5 w-5 fill-current" />
@@ -293,89 +285,87 @@ const [trialExpired, setTrialExpired] = useState(false);
               placeholder="Tell us what you think (optional)"
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={inputCls + " resize-none h-20"}
             />
             <button
               onClick={handleSubmitFeedback}
               disabled={feedbackRating === 0 || feedbackSubmitting}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className={primaryBtnCls}
             >
               <Send className="h-4 w-4" />
               {feedbackSubmitting ? "Sending..." : "Send Feedback"}
             </button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      <Card className="border-border/60 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-              <Key className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle>Activate License</CardTitle>
-              <CardDescription>Enter your license key to activate Woxus</CardDescription>
-            </div>
+      {/* Activate License Card */}
+      <div className={cardCls}>
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center text-foreground shrink-0">
+            <Key className="h-5 w-5" />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4 pb-6">
-          <div className="flex gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">Activate License</h2>
+            <p className="text-xs text-muted-foreground font-medium">Enter your license key to activate Woxus</p>
+          </div>
+        </div>
+        <div className="space-y-3 pt-1">
+          <div className="flex gap-2.5">
             <input
               type="text"
               placeholder="XXXX-XXXX-XXXX-XXXX"
               value={licenseInput}
               onChange={(e) => { setLicenseInput(e.target.value.toUpperCase()); setLicenseError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter") handleVerify(); }}
-              className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={inputCls + " flex-1 font-mono"}
             />
             <button
               onClick={handleVerify}
               disabled={!licenseInput.trim() || verifying}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className={primaryBtnCls}
             >
               {verifying ? "Verifying..." : "Activate"}
             </button>
           </div>
           {licenseError && (
-            <p className="text-xs text-red-500 flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" />
+            <p className="text-xs text-destructive font-medium flex items-center gap-1.5 pt-1">
+              <AlertCircle className="h-3.5 w-3.5" />
               {licenseError}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
+      {/* Start Free Trial Card */}
       {state === "unlicensed" && (
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle>Start Free Trial</CardTitle>
-                <CardDescription>Get 10 minutes of free trial access</CardDescription>
-              </div>
+        <div className={cardCls}>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center text-foreground shrink-0">
+              <Clock className="h-5 w-5" />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pb-6">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Start Free Trial</h2>
+              <p className="text-xs text-muted-foreground font-medium">Get 10 minutes of free trial access</p>
+            </div>
+          </div>
+          <div className="space-y-3.5 pt-1">
             <input
               type="email"
               placeholder="Your email (optional)"
               value={trialEmail}
               onChange={(e) => setTrialEmail(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className={inputCls}
             />
             <button
               onClick={handleStartTrial}
               disabled={startingTrial}
-              className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className={primaryBtnCls + " w-full"}
             >
               {startingTrial ? "Starting..." : "Start Free Trial"}
             </button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

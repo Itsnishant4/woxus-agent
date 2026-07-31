@@ -87,13 +87,43 @@ class TaskManager:
                 task.stdout = std_out.decode("utf-8", errors="replace")
                 task.stderr = std_err.decode("utf-8", errors="replace")
                 task.exit_code = proc.returncode
-                task.state = "done" if proc.returncode == 0 else "failed"
+
+                if proc.returncode != 0:
+                    logger.info("🤖 [MINI-AGENT] Task %s failed (exit %d). Invoking Mini Agent to auto-heal...", task.task_id, proc.returncode)
+                    from .mini_agent import auto_heal_command
+                    healed = await auto_heal_command(
+                        original_command=command,
+                        error_message=f"Process exited with code {proc.returncode}",
+                        stdout=task.stdout,
+                        stderr=task.stderr,
+                        cwd=task.cwd,
+                    )
+                    if healed.get("healed"):
+                        task.exit_code = 0
+                        task.state = "done"
+                        task.stdout += f"\n\n🤖 [Mini Agent Auto-Healed Successfully]\n{healed.get('stdout', '')}"
+                    else:
+                        task.state = "failed"
+                else:
+                    task.state = "done"
             except asyncio.CancelledError:
                 task.state = "failed"
                 task.stderr = "Task cancelled"
             except Exception as e:
-                task.state = "failed"
-                task.stderr = str(e)
+                logger.info("🤖 [MINI-AGENT] Exception in task %s: %s. Invoking Mini Agent...", task.task_id, e)
+                from .mini_agent import auto_heal_command
+                healed = await auto_heal_command(
+                    original_command=command,
+                    error_message=str(e),
+                    cwd=task.cwd,
+                )
+                if healed.get("healed"):
+                    task.exit_code = 0
+                    task.state = "done"
+                    task.stdout = healed.get("stdout", "")
+                else:
+                    task.state = "failed"
+                    task.stderr = str(e)
             finally:
                 task.end_time = time.time()
 

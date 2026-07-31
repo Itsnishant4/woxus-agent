@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getGlobalHotkey: () => ipcRenderer.invoke('get-global-hotkey'),
   setGlobalHotkey: (hotkey: string) => ipcRenderer.invoke('set-global-hotkey', hotkey),
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
+  toggleMainWindow: () => ipcRenderer.send('orb-toggle-main'),
   platform: process.platform,
 
   // License IPC

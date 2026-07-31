@@ -21,8 +21,8 @@ export default function LicensesPage() {
   const [q, setQ] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
   const [genExpiry, setGenExpiry] = useState("365");
-  const [genMaxAct, setGenMaxAct] = useState("3");
-
+  const [genMaxAct, setGenMaxAct] = useState("1");
+ 
   const fetchLicenses = useCallback(async () => {
     const params = new URLSearchParams({ page: String(page), limit: "20" });
     if (q) params.set("q", q);
@@ -38,7 +38,7 @@ export default function LicensesPage() {
     await fetch("/api/licenses/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expiryDays: parseInt(genExpiry), maxActivations: parseInt(genMaxAct) }),
+      body: JSON.stringify({ expiryDays: parseInt(genExpiry), maxActivations: 1 }),
     });
     setShowGenerate(false);
     fetchLicenses();
@@ -134,7 +134,7 @@ export default function LicensesPage() {
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Max activations</label>
-              <input type="number" value={genMaxAct} onChange={(e) => setGenMaxAct(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <input type="number" value="1" disabled readOnly className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm opacity-70 cursor-not-allowed" />
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onPress={() => setShowGenerate(false)}>Cancel</Button>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, screen } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, screen, type NativeImage } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
@@ -199,11 +199,11 @@ function registerGlobalHotkey() {
 
 
 function createTray() {
-  const trayIconFile = process.platform === 'darwin' ? 'tray-icon.png' : 'tray-icon-32.png';
-  let icon = nativeImage.createFromPath(iconPath('tray', trayIconFile));
+  let icon: NativeImage;
   if (process.platform === 'darwin') {
-    icon = icon.resize({ width: 22, height: 22 });
-    icon.setTemplateImage(true);
+    icon = nativeImage.createFromPath(iconPath('icon-transparent.png')).resize({ width: 22, height: 22 });
+  } else {
+    icon = nativeImage.createFromPath(iconPath('tray', 'tray-icon-32.png'));
   }
   tray = new Tray(icon);
   tray.setToolTip('Woxus Agent');

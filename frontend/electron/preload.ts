@@ -17,4 +17,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTrialStatus: () => ipcRenderer.invoke('trial:status'),
   startTrial: (email: string) => ipcRenderer.invoke('trial:start', email),
   submitFeedback: (rating: number, text: string) => ipcRenderer.invoke('feedback:submit', rating, text),
+
+  // Auto-update
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (callback: (state: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on('update:status', listener);
+    return () => ipcRenderer.removeListener('update:status', listener);
+  },
 });

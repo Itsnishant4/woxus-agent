@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
 import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
+import { initAutoUpdater, checkForUpdates, installUpdate, UpdateStatus } from './updaterService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -265,6 +266,11 @@ app.whenReady().then(async () => {
   createOrbWindows();
   createTray();
   registerGlobalHotkey();
+  initAutoUpdater((state: UpdateStatus) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('update:status', state);
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -295,6 +301,16 @@ app.on('will-quit', () => {
 });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('update:check', () => {
+  checkForUpdates();
+  return true;
+});
+
+ipcMain.handle('update:install', () => {
+  installUpdate();
+  return true;
+});
 
 ipcMain.handle('get-auto-launch', () => {
   return settingsStore.getLaunchAtLogin();

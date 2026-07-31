@@ -377,6 +377,46 @@ woxus/
 
 ---
 
+## Auto-Update Path — 5 Phase Plan (issues #13 → #31 → #32 → #29 → #33)
+
+Goal: updater running → backend ships → combined installer → mac signed → release automation.
+
+### Phase 1 — #13 Auto-update (electron-updater) — IN PROGRESS
+- [x] `npm i electron-updater` (regular dep)
+- [x] `electron-builder.yml`: `publish: {provider: github, owner: Itsnishant4, repo: woxus-agent, token: ${env.GH_TOKEN}}`; mac adds `zip` target (updater needs latest-mac.yml + blockmap)
+- [x] `frontend/electron/updaterService.ts` (new): init only packaged or `--update-dev`; macOS gated behind signing flag; autoDownload; events → `update:status` IPC (checking/available/progress/downloaded/none/error); `installUpdate()` → `quitAndInstall()` (backend stops via before-quit); silent check 10s post-ready
+- [x] `main.ts`: `update:check` / `update:install` IPC + `update:status` push + `app:get-version`
+- [x] `preload.ts`: `checkForUpdates`, `installUpdate`, `onUpdateStatus`, `getAppVersion`
+- [x] `SettingsPage.tsx`: update card — version, Check button, status, progress bar, Restart & Update
+- [x] `release.yml`: drop softprops; electron-builder self-publishes (GH_TOKEN); matrix macos+windows+ubuntu
+- [x] `dev-app-update.yml` + local http.server test loop (package 0.1.0 → serve → bump 0.1.1 → `--update-dev` → check/download/install)
+- [ ] GitHub release E2E: real tag → fresh install old version → auto-update to new
+
+### Phase 2 — #31 PyInstaller backend bundling
+- [ ] Relocate `DATA_DIR` (license.py, memory_engine.py, trial_tracker.py) to `~/.woxus/data` — **prevents data wipe on update**
+- [ ] `backend/woxus_backend.spec`: one-folder; hidden imports llama_cpp / ctranslate2 / faster_whisper; exclude dev junk
+- [ ] CI pyinstaller job per OS (mac/win/ubuntu) → backend-dist artifact
+- [ ] `electron-builder.yml`: `extraResources: backend-dist`
+- [ ] `backendManager.ts`: packaged mode spawns bundled binary (`.exe` on win), passes GEMINI_API_KEY / GEMINI_MODEL / WOXUS_DATA_DIR
+- [ ] SettingsPage API key field → electron-store → backend env (packaged apps have no .env)
+- [ ] Verify per OS: backend boots, license+memory persist across reinstall, prompt writer works
+
+### Phase 3 — #32 Combined installer
+- [ ] Confirm DMG/NSIS/AppImage carry backend via extraResources (no separate artifact needed)
+- [ ] Verify NSIS Program Files install (data stays in ~/.woxus), DMG drag-install, AppImage
+
+### Phase 4 — #29 macOS code signing + notarization (external creds)
+- [ ] Apple Developer Program cert ($99/yr); secrets: CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+- [ ] electron-builder `mac.notarize` + `hardenedRuntime: true`
+- [ ] Flip macOS updater gate flag
+- [ ] Without cert: mac updates stay dormant; Windows/Linux ship first
+
+### Phase 5 — #33 Release automation (polish)
+- [ ] Version bump helper, changelog generation, draft-release approval
+- [ ] Keep existing tag flow; add scheduled smoke test
+
+---
+
 ## Immediate Next Steps
 
 1. [x] Scaffold Electron + React frontend

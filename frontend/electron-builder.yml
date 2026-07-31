@@ -1,10 +1,17 @@
 appId: com.woxus.app
 productName: Woxus
+publish:
+  provider: github
+  owner: Itsnishant4
+  repo: woxus-agent
+  token: ${env.GH_TOKEN}
 directories:
   output: release
 files:
   - dist
   - dist-electron
+asarUnpack:
+  - node_modules/@nut-tree-fork/**/*.node
 extraResources:
   - from: ../icons
     to: icons
@@ -14,6 +21,7 @@ mac:
   icon: ../icons/macos/icon.icns
   target:
     - dmg
+    - zip
   artifactName: ${productName}-${version}-${arch}.${ext}
   extendInfo:
     NSMicrophoneUsageDescription: Woxus uses the microphone to animate the orb when you speak.

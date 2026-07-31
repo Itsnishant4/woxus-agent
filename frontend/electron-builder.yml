@@ -5,6 +5,8 @@ directories:
 files:
   - dist
   - dist-electron
+asarUnpack:
+  - node_modules/@nut-tree-fork/**/*.node
 extraResources:
   - from: ../icons
     to: icons

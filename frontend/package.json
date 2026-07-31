@@ -16,6 +16,7 @@
   "dependencies": {
     "@heroui/react": "^3.2.2",
     "@heroui/styles": "^3.2.2",
+    "@nut-tree-fork/nut-js": "^4.2.6",
     "@radix-ui/react-avatar": "^1.2.4",
     "@radix-ui/react-dialog": "^1.1.21",
     "@radix-ui/react-dropdown-menu": "^2.1.22",

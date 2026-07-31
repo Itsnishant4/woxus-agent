@@ -152,6 +152,55 @@ class GeminiLiveService:
             turns.pop(0)
         return turns
 
+    async def generate_spoken(
+        self,
+        system_instruction: str,
+        user_text: str,
+        max_output_tokens: int = 1200,
+    ) -> Optional[bytes]:
+        """One-shot spoken (audio) response from the Live main agent.
+
+        This model only supports audio output (TEXT modalities rejected with
+        1007), so the default modality is used and the audio parts of the model
+        turn are returned. Transcribe them locally (whisper) to get text.
+        """
+        config = types.LiveConnectConfig(
+            system_instruction=types.Content(parts=[types.Part(text=system_instruction)]),
+            generation_config=types.GenerationConfig(
+                max_output_tokens=max_output_tokens,
+                temperature=0.3,
+            ),
+        )
+        audio_parts: list[bytes] = []
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            audio_parts.clear()
+            try:
+                async with self.client.aio.live.connect(model=self.models[0], config=config) as session:
+                    await session.send_client_content(
+                        turns=[{"role": "user", "parts": [{"text": user_text}]}],
+                        turn_complete=True,
+                    )
+                    async for msg in session.receive():
+                        sc = msg.server_content
+                        if not sc:
+                            continue
+                        if sc.model_turn:
+                            for p in sc.model_turn.parts:
+                                if p.inline_data and p.inline_data.data:
+                                    audio_parts.append(p.inline_data.data)
+                        if sc.turn_complete:
+                            break
+                if audio_parts:
+                    return b"".join(audio_parts)
+                last_error = RuntimeError("session returned no audio")
+            except Exception as e:
+                last_error = e
+                logger.warning("🤖 [MAIN AGENT] generate_spoken attempt %d failed: %s", attempt + 1, e)
+            await asyncio.sleep(1.5 * (attempt + 1))
+        logger.error("🤖 [MAIN AGENT] generate_spoken failed after retries: %s", last_error)
+        return None
+
     async def start_session(
         self,
         audio_input_queue: asyncio.Queue[bytes],

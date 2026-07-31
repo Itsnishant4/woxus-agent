@@ -71,6 +71,8 @@ async def handle_tool_call(name: str, args: dict) -> dict:
             return _memory_list(args)
         elif name == "memory_delete":
             return _memory_delete(args)
+        elif name == "write_to_focused_input":
+            return _write_to_focused_input(args)
         else:
             return {"error": f"Unknown tool: {name}"}
     except Exception as e:
@@ -191,6 +193,16 @@ def _list_dir(args: dict) -> dict:
         return {"success": True, "path": path, "items": items, "count": len(items)}
     except Exception as e:
         return {"error": str(e)}
+
+
+# --- Prompt Writer ---
+
+def _write_to_focused_input(args: dict) -> dict:
+    """Return a paste payload — the Electron side pastes it at the cursor."""
+    text = str(args.get("text") or "").strip()
+    if not text:
+        return {"error": "No text provided to write"}
+    return {"action": "paste", "text": text, "ok": True}
 
 
 # --- Memory ---

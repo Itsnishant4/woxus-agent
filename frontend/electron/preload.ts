@@ -10,6 +10,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMainWindow: () => ipcRenderer.send('orb-toggle-main'),
   platform: process.platform,
 
+  // Automation permission
+  getPermissionStatus: () => ipcRenderer.invoke('permission:check'),
+  openPermissionSettings: () => ipcRenderer.invoke('permission:open-settings'),
+
+  // Prompt paste
+  agentPaste: (text: string) => ipcRenderer.invoke('agent:paste', text),
+  getActiveWindowTitle: () => ipcRenderer.invoke('agent:active-window'),
+
   // License IPC
   getHardwareId: () => ipcRenderer.invoke('hardware:get-id'),
   verifyLicense: (licenseKey: string) => ipcRenderer.invoke('license:verify', licenseKey),

@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
 import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
+import { checkPermission, openPermissionSettings } from './permissionService.js';
+import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -179,6 +181,11 @@ function createOverlayWindow() {
 
 function registerGlobalHotkey() {
   globalShortcut.unregisterAll();
+  // Gate: no hotkey until automation permission granted (macOS)
+  if (process.platform === 'darwin' && !checkPermission().ok) {
+    console.log('[main] Automation permission not granted — global hotkey disabled');
+    return;
+  }
   const hotkey = settingsStore.getGlobalHotkey() || 'CommandOrControl+Shift+P';
   try {
     globalShortcut.register(hotkey, () => {
@@ -186,8 +193,10 @@ function registerGlobalHotkey() {
         if (overlayWindow.isVisible()) {
           overlayWindow.hide();
         } else {
-          overlayWindow.show();
-          overlayWindow.focus();
+          // Remember the window under the cursor BEFORE showing — the overlay
+          // must not steal focus from it.
+          saveActiveWindow();
+          overlayWindow.showInactive();
         }
       }
     });
@@ -265,6 +274,9 @@ app.whenReady().then(async () => {
   createOrbWindows();
   createTray();
   registerGlobalHotkey();
+  if (process.platform === 'darwin' && !checkPermission().ok) {
+    startPermissionPoller();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -291,10 +303,49 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  if (permissionPollTimer) {
+    clearInterval(permissionPollTimer);
+    permissionPollTimer = null;
+  }
   globalShortcut.unregisterAll();
 });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('permission:check', () => checkPermission());
+ipcMain.handle('permission:open-settings', () => {
+  openPermissionSettings();
+  return checkPermission();
+});
+
+ipcMain.handle('agent:paste', async (_event, text: string) => {
+  const perm = checkPermission();
+  if (process.platform === 'darwin' && !perm.ok) {
+    return { ok: false, method: 'none', error: 'permission-denied' };
+  }
+  // Put the user's app back in focus BEFORE pasting so the text lands there,
+  // not in the overlay or Woxus.
+  await restoreActiveWindow();
+  await new Promise((r) => setTimeout(r, 150));
+  return pasteText(String(text));
+});
+
+ipcMain.handle('agent:active-window', () => getActiveWindowTitle());
+
+let permissionPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function startPermissionPoller() {
+  if (permissionPollTimer) return;
+  permissionPollTimer = setInterval(() => {
+    if (checkPermission().ok) {
+      if (permissionPollTimer) {
+        clearInterval(permissionPollTimer);
+        permissionPollTimer = null;
+      }
+      registerGlobalHotkey();
+    }
+  }, 2000);
+}
 
 ipcMain.handle('get-auto-launch', () => {
   return settingsStore.getLaunchAtLogin();

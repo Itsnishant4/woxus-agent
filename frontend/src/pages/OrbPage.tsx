@@ -130,7 +130,7 @@ export default function OrbPage() {
             className="text-[15px] font-bold text-white transition-opacity duration-200"
             style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)', opacity: talking ? 1 : 0.92 }}
           >
-            W
+            <img src="/logo.png" alt="Woxus" className="h-8 w-8 brightness-0 invert" />
           </span>
         </div>
       </div>

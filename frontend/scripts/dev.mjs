@@ -9,9 +9,8 @@ const root = resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 
 async function start() {
-  // Build electron main process files first
-  console.log('[Electron Build] Compiling typescript files...');
-  execSync('node scripts/build-electron.mjs', { cwd: root, stdio: 'inherit' });
+  console.log('[Dev] Building Electron scripts...');
+  execSync('npx tsc -p tsconfig.electron.json', { cwd: root, stdio: 'inherit' });
 
   const server = await createServer({ configFile: './vite.config.ts', root });
   await server.listen();

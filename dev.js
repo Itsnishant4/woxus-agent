@@ -11,14 +11,11 @@ function log(tag, msg) {
 
 const fs = require('fs');
 
-// Detect Python path (cross-platform venv)
-let pythonPath = isWin
+// Detect Python path (cross-platform venv or fallback to system python)
+const venvPythonPath = isWin
   ? path.join(ROOT, 'backend', '.venv', 'Scripts', 'python.exe')
   : path.join(ROOT, 'backend', '.venv', 'bin', 'python');
-
-if (!fs.existsSync(pythonPath)) {
-  pythonPath = isWin ? 'python' : 'python3';
-}
+const pythonPath = fs.existsSync(venvPythonPath) ? venvPythonPath : (isWin ? 'python.exe' : 'python');
 
 // Start Python backend
 const backend = spawn(
@@ -46,23 +43,11 @@ setTimeout(() => {
     ['run', 'electron:dev'],
     {
       cwd: path.join(ROOT, 'frontend'),
-      stdio: 'pipe',
+      stdio: 'inherit',
       shell: isWin,
       env: { ...process.env },
     }
   );
-
-  electron.stdout.on('data', (data) => {
-    process.stdout.write(data);
-  });
-
-  electron.stderr.on('data', (data) => {
-    const str = data.toString();
-    // Filter out known harmless Chromium bug that spams the console
-    if (!str.includes('OnSizeReceived failed with Error: -2')) {
-      process.stderr.write(data);
-    }
-  });
 
   electron.on('error', (err) => log('Electron', `Failed: ${err.message}`));
   electron.on('exit', () => {

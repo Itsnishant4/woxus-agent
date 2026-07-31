@@ -11,4 +11,4 @@ python-dotenv==1.0.1
 cryptography==44.0.0
 python-multipart==0.0.18
 aiofiles==24.1.0
-numpy==2.0.0
+numpy>=2.1.0

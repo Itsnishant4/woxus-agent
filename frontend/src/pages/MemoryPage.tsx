@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@heroui/react';
 import { Brain, Search, Trash2, Star } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { API_BASE } from '@/services/api';
 
 interface Memory {
   id: string;
@@ -11,7 +12,7 @@ interface Memory {
   created_at: string;
 }
 
-const API = '/api';
+const API = API_BASE;
 
 export default function MemoryPage() {
   const [memories, setMemories] = useState<Memory[]>([]);

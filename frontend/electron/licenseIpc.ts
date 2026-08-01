@@ -68,25 +68,10 @@ export async function getLicenseStatus(): Promise<{
   trialEmail?: string;
   trialRemaining?: number;
   trialTotal?: number;
+  offline?: boolean;
 }> {
-  // Check cached license first
-  const cached = settingsStore.getCachedLicenseStatus();
-  if (cached?.valid) {
-    return { status: 'licensed', licenseKey: cached.license_key };
-  }
-
-  // Check cached trial
-  const cachedTrial = settingsStore.getCachedTrialStatus();
-  if (cachedTrial?.active) {
-    return {
-      status: 'trial',
-      trialEmail: cachedTrial.email,
-      trialRemaining: cachedTrial.remaining_seconds,
-      trialTotal: cachedTrial.total_seconds,
-    };
-  }
-
-  // Hit backend
+  // Server must re-verify every launch when a key is stored — a cached
+  // 'valid' result alone is never trusted (revocation must lock the app).
   const hwid = getHardwareId();
   const storedKey = settingsStore.getLicenseKey();
   if (storedKey) {
@@ -106,12 +91,30 @@ export async function getLicenseStatus(): Promise<{
         });
         return { status: 'licensed', licenseKey: storedKey };
       }
-      // Key genuinely invalid — clear cache. Offline (server unreachable) keeps cache.
+      // Key genuinely invalid / revoked — clear cache and lock.
       if (!data.offline) {
         settingsStore.setLicenseKey('');
         settingsStore.setCachedLicenseStatus(null);
+        return { status: 'unlicensed' };
       }
-    } catch { /* offline — continue to trial check */ }
+      // Backend unreachable — fall through to offline cache grace below.
+    } catch { /* backend not up yet — fall through to offline cache grace */ }
+
+    const cached = settingsStore.getCachedLicenseStatus();
+    if (cached?.valid) {
+      return { status: 'licensed', licenseKey: cached.license_key, offline: true };
+    }
+  }
+
+  // Check cached trial
+  const cachedTrial = settingsStore.getCachedTrialStatus();
+  if (cachedTrial?.active) {
+    return {
+      status: 'trial',
+      trialEmail: cachedTrial.email,
+      trialRemaining: cachedTrial.remaining_seconds,
+      trialTotal: cachedTrial.total_seconds,
+    };
   }
 
   try {

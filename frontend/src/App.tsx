@@ -143,21 +143,37 @@ export default function App() {
   }, [checkModelStatus]);
 
   const checkLicense = useCallback(async () => {
-    // @ts-ignore
-    const result = await window.electronAPI?.getLicenseStatus?.();
-    if (!result) { setAppStatus('unlicensed'); return; }
+    let attempts = 0;
+    while (true) {
+      // @ts-ignore
+      const result = await window.electronAPI?.getLicenseStatus?.();
+      if (!result) {
+        setAppStatus('unlicensed');
+        return;
+      }
 
-    if (result.status === 'licensed') {
-      setAppStatus('licensed');
-      return;
+      if (result.status === 'licensed') {
+        // Offline-cache result — wait for the backend so revocations
+        // can't be bypassed by starting before verification completes.
+        if (!result.offline) {
+          setAppStatus('licensed');
+          return;
+        }
+        if (attempts >= 30) {
+          setAppStatus('licensed');
+          return;
+        }
+      } else if (result.status === 'trial') {
+        setAppStatus('trial');
+        return;
+      } else {
+        setAppStatus('unlicensed');
+        return;
+      }
+
+      attempts += 1;
+      await new Promise((r) => setTimeout(r, 1000));
     }
-
-    if (result.status === 'trial') {
-      setAppStatus('trial');
-      return;
-    }
-
-    setAppStatus('unlicensed');
   }, []);
 
   useEffect(() => {

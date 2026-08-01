@@ -99,6 +99,7 @@ def _cache_remote_license(result: dict, license_key: str, hardware_id: str):
     if not result.get("valid"):
         return
     licenses = _load_licenses()
+    now = _utcnow().isoformat()
     for lic in licenses:
         if lic["key"] == license_key:
             hw_ids = lic.setdefault("hardware_ids", [])
@@ -106,6 +107,8 @@ def _cache_remote_license(result: dict, license_key: str, hardware_id: str):
                 hw_ids.append(hardware_id)
             lic["expiry"] = result.get("expiry")
             lic["features"] = result.get("features") or ["all"]
+            lic["revoked"] = False
+            lic["verified_at"] = now
             _save_licenses(licenses)
             return
     licenses.append({
@@ -115,53 +118,40 @@ def _cache_remote_license(result: dict, license_key: str, hardware_id: str):
         "hardware_ids": [hardware_id],
         "max_activations": 99,
         "revoked": False,
-        "created_at": _utcnow().isoformat(),
+        "created_at": now,
+        "verified_at": now,
         "cached_from_server": True,
     })
     _save_licenses(licenses)
 
 
-def generate_key(expiry_days: int = 365, features: list[str] | None = None) -> dict:
-    key = f"WOX-{uuid.uuid4().hex[:12].upper()}"
-    record = {
-        "key": key,
-        "expiry": (_utcnow() + timedelta(days=expiry_days)).isoformat(),
-        "features": features or ["all"],
-        "hardware_ids": [],
-        "max_activations": 1,
-        "revoked": False,
-        "created_at": _utcnow().isoformat(),
-    }
-    licenses = _load_licenses()
-    licenses.append(record)
+def _find_cached(license_key: str) -> dict | None:
+    for lic in _load_licenses():
+        if lic["key"] == license_key:
+            return lic
+    return None
+
+
+def _drop_cached(license_key: str):
+    licenses = [lic for lic in _load_licenses() if lic["key"] != license_key]
     _save_licenses(licenses)
-    return record
+
+
+def _cache_fresh(lic: dict) -> bool:
+    """Cache usable offline only when server-verified within TTL."""
+    if lic.get("revoked"):
+        return False
+    verified = _parse_expiry(lic.get("verified_at"))
+    if verified is None:
+        return False
+    ttl_days = float(os.getenv("LICENSE_CACHE_TTL_DAYS", "7"))
+    return (_utcnow() - verified).total_seconds() < ttl_days * 86400
 
 
 def verify_key(license_key: str, hardware_id: str) -> dict:
-    licenses = _load_licenses()
-    for lic in licenses:
-        if lic["key"] != license_key:
-            continue
-        if lic.get("revoked"):
-            return {"valid": False, "reason": "License revoked"}
-        expiry = _parse_expiry(lic.get("expiry"))
-        if expiry is not None and expiry < _utcnow():
-            return {"valid": False, "reason": "License expired"}
-        hw_ids = lic.get("hardware_ids", [])
-        max_act = lic.get("max_activations", 1)
-        if hardware_id not in hw_ids and len(hw_ids) >= max_act:
-            return {"valid": False, "reason": "License already activated on another device"}
-        if hardware_id not in hw_ids:
-            hw_ids.append(hardware_id)
-            _save_licenses(licenses)
-        return {
-            "valid": True,
-            "expiry": lic["expiry"],
-            "features": lic.get("features", []),
-        }
+    cached = _find_cached(license_key)
 
-    # Fallback: remote admin panel (deployed license server)
+    # 1) Remote admin panel is authoritative — always verify when reachable.
     remote = _verify_remote(license_key, hardware_id)
     if remote is not None:
         if remote.get("valid"):
@@ -171,9 +161,11 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
                 "expiry": remote.get("expiry"),
                 "features": remote.get("features") or ["all"],
             }
+        # Revoked / expired / invalid — never fall back to stale cache.
+        _drop_cached(license_key)
         return {"valid": False, "reason": remote.get("reason", "Invalid license key")}
 
-    # Fallback: direct MongoDB (admin-generated keys, dev only)
+    # 2) Fallback: direct MongoDB (admin-generated keys, dev only)
     col = _get_mongo_collection()
     if col is not None:
         try:
@@ -203,5 +195,45 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
         except Exception as e:
             logger.warning(f"MongoDB license check failed: {e}")
 
-    # Server unreachable and nothing verified locally — never grant unverified access
+    # 3) Server unreachable — offline grace only from a fresh server-verified cache.
+    if cached is not None and _cache_fresh(cached):
+        expiry = _parse_expiry(cached.get("expiry"))
+        if expiry is not None and expiry < _utcnow():
+            return {"valid": False, "reason": "License expired", "offline": True}
+        hw_ids = cached.get("hardware_ids", [])
+        max_act = cached.get("max_activations", 1)
+        if hardware_id not in hw_ids and len(hw_ids) >= max_act:
+            return {"valid": False, "reason": "License already activated on another device", "offline": True}
+        if hardware_id not in hw_ids:
+            licenses = _load_licenses()
+            for lic in licenses:
+                if lic["key"] == license_key:
+                    lic.setdefault("hardware_ids", []).append(hardware_id)
+                    break
+            _save_licenses(licenses)
+        return {
+            "valid": True,
+            "expiry": cached.get("expiry"),
+            "features": cached.get("features", ["all"]),
+            "offline": True,
+        }
+
+    # Stale or missing cache and server unreachable — never grant unverified access.
     return {"valid": False, "reason": "License server unreachable — could not verify key", "offline": True}
+
+
+def generate_key(expiry_days: int = 365, features: list[str] | None = None) -> dict:
+    key = f"WOX-{uuid.uuid4().hex[:12].upper()}"
+    record = {
+        "key": key,
+        "expiry": (_utcnow() + timedelta(days=expiry_days)).isoformat(),
+        "features": features or ["all"],
+        "hardware_ids": [],
+        "max_activations": 1,
+        "revoked": False,
+        "created_at": _utcnow().isoformat(),
+    }
+    licenses = _load_licenses()
+    licenses.append(record)
+    _save_licenses(licenses)
+    return record

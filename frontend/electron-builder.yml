@@ -26,15 +26,26 @@ extraResources:
 mac:
   icon: ../icons/macos/icon.icns
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+        - universal
+    - target: zip
+      arch:
+        - arm64
+        - x64
+        - universal
   artifactName: ${productName}-${version}-${arch}.${ext}
   extendInfo:
     NSMicrophoneUsageDescription: Woxus uses the microphone to animate the orb when you speak.
 win:
   icon: ../icons/windows/icon.ico
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
+        - ia32
   artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
   icon: ../icons/icon.png

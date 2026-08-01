@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   Settings, Brain, Key,
   PanelLeft, Zap, ListChecks, Keyboard, Mic,
+  Download, CheckCircle2, RefreshCw,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
 import { API_BASE } from '@/services/api';
@@ -118,6 +119,7 @@ export default function App() {
   const [agentStatus] = useState<AgentStatus>('idle');
   const [cmdOpen, setCmdOpen] = useState(false);
   const [permissionOk, setPermissionOk] = useState<boolean | null>(null);
+  const [updateState, setUpdateState] = useState<any>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -206,6 +208,16 @@ export default function App() {
       window.removeEventListener('focus', onFocus);
     };
   }, [checkPermission]);
+
+  // Subscribe to auto-updater status for the top banner.
+  useEffect(() => {
+    // @ts-ignore
+    if (window.electronAPI?.onUpdateStatus) {
+      // @ts-ignore
+      const unsubscribe = window.electronAPI.onUpdateStatus(setUpdateState);
+      return unsubscribe;
+    }
+  }, []);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -339,6 +351,52 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
+        {/* Update Banner (top of the app) */}
+        {updateState?.status === 'available' && (
+          <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-violet-600 text-white text-sm">
+            <p className="flex items-center gap-2 font-medium">
+              <Download className="h-4 w-4" /> New update v{updateState.version} available
+            </p>
+            <button
+              onClick={() => {
+                // @ts-ignore
+                window.electronAPI?.downloadUpdate?.();
+              }}
+              className="px-3 py-1 rounded-md bg-white text-violet-700 font-semibold hover:bg-violet-50 transition-colors shrink-0"
+            >
+              Download
+            </button>
+          </div>
+        )}
+
+        {updateState?.status === 'downloading' && (
+          <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-violet-600 text-white text-sm">
+            <p className="flex items-center gap-2 font-medium">
+              <RefreshCw className="h-4 w-4 animate-spin" /> Downloading v{updateState.version}… {updateState.percent}%
+            </p>
+            <div className="w-40 h-2 rounded-full bg-white/30 overflow-hidden shrink-0">
+              <div className="h-full bg-white transition-all" style={{ width: `${updateState.percent || 0}%` }} />
+            </div>
+          </div>
+        )}
+
+        {updateState?.status === 'downloaded' && (
+          <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-emerald-600 text-white text-sm">
+            <p className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="h-4 w-4" /> Update v{updateState.version} ready to install
+            </p>
+            <button
+              onClick={() => {
+                // @ts-ignore
+                window.electronAPI?.installUpdate?.();
+              }}
+              className="px-3 py-1 rounded-md bg-white text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors shrink-0"
+            >
+              Restart &amp; Update
+            </button>
+          </div>
+        )}
+
         {/* Top Bar */}
         <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-background/80 backdrop-blur-sm">
           <h1 className="text-sm font-medium text-foreground">

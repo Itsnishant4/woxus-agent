@@ -6,9 +6,10 @@ import type { UpdateInfo, ProgressInfo } from 'electron-updater';
 
 const { autoUpdater } = electronUpdater;
 
-// macOS auto-update requires a code-signed + notarized app (issue #29).
-// Until that lands, keep macOS production updates dormant.
-const MAC_UPDATES_ENABLED = false;
+// In-place updates (Squirrel.Mac) work for unsigned apps that were already
+// launched once (which clears Gatekeeper quarantine). Fresh downloads still
+// show "unidentified developer", but updates to the running app apply fine.
+const MAC_UPDATES_ENABLED = true;
 
 export type UpdateStatus =
   | { status: 'idle' }
@@ -38,8 +39,9 @@ export function initAutoUpdater(sink: StatusSink): void {
     return;
   }
 
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // Manual control: no auto-download, no auto-install
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
   // --update-dev: point at a local update server.
   // Packaged apps always read resources/app-update.yml, so override via
@@ -69,6 +71,9 @@ export function initAutoUpdater(sink: StatusSink): void {
     console.error('[updater] error:', err.message);
     sink({ status: 'error', error: err.message });
   });
+  autoUpdater.on('update-cancelled', () => {
+    sink({ status: 'available', version: '' });
+  });
 
   // Silent check shortly after startup (no user prompt if none available).
   setTimeout(() => {
@@ -79,9 +84,15 @@ export function initAutoUpdater(sink: StatusSink): void {
   }, 10_000);
 }
 
-export function checkForUpdates(): void {
-  autoUpdater.checkForUpdates().catch((err) => {
+export async function checkForUpdates(): Promise<void> {
+  await autoUpdater.checkForUpdates().catch((err) => {
     console.error('[updater] check failed:', err);
+  });
+}
+
+export async function downloadUpdate(): Promise<void> {
+  await autoUpdater.downloadUpdate().catch((err) => {
+    console.error('[updater] download failed:', err);
   });
 }
 

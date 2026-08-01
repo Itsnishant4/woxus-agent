@@ -149,7 +149,15 @@ function UpdateSection() {
       </div>
 
       {status === 'available' && (
-        <p className="text-sm text-violet-600">Update v{newVersion} found — downloading…</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-violet-600">Update v{newVersion} available</p>
+          <button
+            onClick={() => api?.downloadUpdate()}
+            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" /> Download
+          </button>
+        </div>
       )}
 
       {status === 'downloading' && (

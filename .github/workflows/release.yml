@@ -77,9 +77,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # electron-builder self-publishes: writes latest.yml / latest-mac.yml /
+      # electron-builder publishes: writes latest.yml / latest-mac.yml /
       # latest-linux.yml + blockmaps, uploads artifacts to GitHub Releases.
       # extraResources ships the PyInstaller backend inside the app.
-      - run: pnpm run electron:package
+      # electron:release = --publish always (GH_TOKEN from secrets).
+      - run: pnpm run electron:release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

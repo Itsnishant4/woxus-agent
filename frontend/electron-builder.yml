@@ -4,7 +4,9 @@ publish:
   provider: github
   owner: Itsnishant4
   repo: woxus-agent
-  token: ${env.GH_TOKEN}
+  # No explicit token: electron-builder's GitHub provider auto-reads
+  # GH_TOKEN / GITHUB_TOKEN from the environment (set in CI). This lets
+  # local `electron:package` (--publish never) build without a token.
 directories:
   output: release
 files:

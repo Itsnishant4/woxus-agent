@@ -1,0 +1,33 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/public-site",
+    "feat/speed-audio-trial-polish",
+    "feat/voice-free-parallel-tasks",
+    "feat/voice-rebuild-whatsapp-read",
+    "fix/mac-updater-import",
+    "fix/whatsapp-pair-logout",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "feat/public-site": "main",
+    "feat/speed-audio-trial-polish": "main",
+    "feat/voice-free-parallel-tasks": "main",
+    "feat/voice-rebuild-whatsapp-read": "main",
+    "fix/mac-updater-import": "main",
+    "fix/whatsapp-pair-logout": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "feat/public-site",
+    "feat/speed-audio-trial-polish",
+    "feat/voice-free-parallel-tasks",
+    "feat/voice-rebuild-whatsapp-read",
+    "fix/mac-updater-import",
+    "fix/whatsapp-pair-logout",
+    "origin"
+  ]
+}

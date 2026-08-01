@@ -440,8 +440,11 @@ class GeminiLiveService:
                         except Exception:
                             pass
 
-            # Seed the session: history as real conversation turns (reconnect),
-            # or the greeting kicker on a fresh session.
+            # Seed the session with prior conversation turns only on reconnect.
+            # On a fresh session, DON'T inject a greeting turn — that gets
+            # interpreted as a command and can trigger tool/file side-effects.
+            # The system instruction already primes the model; stay silent until
+            # the user speaks (same behavior as the reference app).
             if replay_history:
                 turns = self._history_turns()
                 if turns:
@@ -453,8 +456,6 @@ class GeminiLiveService:
                     })
                     await ws.send(msg)
                     logger.info("Replayed %d conversation turn(s) after reconnect", len(turns))
-            else:
-                text_input_queue.put_nowait("Greet me.")
 
             await asyncio.gather(send_audio(), send_text(), receive())
         except asyncio.CancelledError:

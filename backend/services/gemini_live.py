@@ -16,8 +16,8 @@ import json
 import logging
 import time
 import traceback
-from collections.abc import Awaitable
-from typing import Any, Callable, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from google import genai
 from google.genai import types
@@ -71,8 +71,8 @@ class GeminiLiveService:
         api_keys: str | list[str],
         models: list[str] | str,
         input_sample_rate: int = 16000,
-        tools: Optional[list[Any]] = None,
-        system_instruction: Optional[str] = None,
+        tools: list[Any] | None = None,
+        system_instruction: str | None = None,
     ):
         if isinstance(api_keys, str):
             api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
@@ -92,8 +92,9 @@ class GeminiLiveService:
         self._last_user_input_text = ""
         self._has_logged_turn_latency = True
         self._turn_start = 0.0
+        self._last_audio_sent_time = None
         self._last_response_text = ""
-        self._session_error: Optional[str] = None
+        self._session_error: str | None = None
         self._stop_requested = False
         self.conversation_log: list[dict] = []
         self._last_log_ts = 0.0
@@ -174,9 +175,9 @@ class GeminiLiveService:
         video_input_queue: asyncio.Queue[bytes],
         text_input_queue: asyncio.Queue[Any],
         audio_output_callback: Callable[[bytes], Awaitable[Any]],
-        audio_interrupt_callback: Optional[Callable[[], Awaitable[Any]]] = None,
-        transcription_callback: Optional[Callable[[str, str], Awaitable[Any]]] = None,
-        latency_callback: Optional[Callable[[str, float], Awaitable[Any]]] = None,
+        audio_interrupt_callback: Callable[[], Awaitable[Any]] | None = None,
+        transcription_callback: Callable[[str, str], Awaitable[Any]] | None = None,
+        latency_callback: Callable[[str, float], Awaitable[Any]] | None = None,
     ):
         """Open a Gemini Live session and run send/receive loops.
 
@@ -217,9 +218,9 @@ class GeminiLiveService:
         audio_input_queue: asyncio.Queue[bytes],
         text_input_queue: asyncio.Queue[Any],
         audio_output_callback: Callable[[bytes], Awaitable[Any]],
-        audio_interrupt_callback: Optional[Callable[[], Awaitable[Any]]],
-        transcription_callback: Optional[Callable[[str, str], Awaitable[Any]]],
-        latency_callback: Optional[Callable[[str, float], Awaitable[Any]]],
+        audio_interrupt_callback: Callable[[], Awaitable[Any]] | None,
+        transcription_callback: Callable[[str, str], Awaitable[Any]] | None,
+        latency_callback: Callable[[str, float], Awaitable[Any]] | None,
         replay_history: bool = False,
     ) -> bool:
         """Run one session attempt. Returns True if the session died with an
@@ -280,6 +281,7 @@ class GeminiLiveService:
         self._user_input_time = None
         self._last_user_input_text = ""
         self._turn_start = 0.0
+        self._last_audio_sent_time = None
 
         try:
             ws = session._ws
@@ -302,6 +304,7 @@ class GeminiLiveService:
                                 None, _transcribe_worker, self, window
                             )
                         b64_data = base64.b64encode(chunk).decode("utf-8")
+                        self._last_audio_sent_time = time.time()
                         msg = json.dumps({
                             "realtime_input": {
                                 "audio": {
@@ -464,9 +467,9 @@ class GeminiLiveService:
     async def _handle_message(
         self, sc: dict,
         audio_output_callback: Callable[[bytes], Awaitable[Any]],
-        audio_interrupt_callback: Optional[Callable[[], Awaitable[Any]]],
-        transcription_callback: Optional[Callable[[str, str], Awaitable[Any]]],
-        latency_callback: Optional[Callable[[str, float], Awaitable[Any]]] = None,
+        audio_interrupt_callback: Callable[[], Awaitable[Any]] | None,
+        transcription_callback: Callable[[str, str], Awaitable[Any]] | None,
+        latency_callback: Callable[[str, float], Awaitable[Any]] | None = None,
     ):
         """Process a single serverContent message."""
         model_turn = sc.get("modelTurn")
@@ -506,11 +509,18 @@ class GeminiLiveService:
             self._append_to_log("model", out_text)
             await transcription_callback("gemini", out_text)
 
-        # Measure & log response latency on first turn output
+        # Measure & log response latency on first turn output. For audio turns
+        # (no inputTranscription on this model) the timer starts at the last
+        # mic chunk sent — true speech-end -> response time.
         if (model_turn or out_text) and not self._has_logged_turn_latency:
-            if self._user_input_time is None:
-                self._user_input_time = time.time()
-            latency_ms = (time.time() - self._user_input_time) * 1000
+            baseline = self._user_input_time
+            if self._last_audio_sent_time and (
+                baseline is None or self._last_audio_sent_time > baseline
+            ):
+                baseline = self._last_audio_sent_time
+            if baseline is None:
+                baseline = time.time()
+            latency_ms = (time.time() - baseline) * 1000
             latency_sec = latency_ms / 1000
             self._has_logged_turn_latency = True
             user_label = self._last_user_input_text or "speech input"
@@ -528,12 +538,14 @@ class GeminiLiveService:
             self._has_logged_turn_latency = False
             self._user_input_time = None
             self._last_user_input_text = ""
+            self._last_audio_sent_time = None
 
         if sc.get("interrupted"):
             logger.info("Gemini interrupted by user")
             self._has_logged_turn_latency = False
             self._user_input_time = None
             self._last_user_input_text = ""
+            self._last_audio_sent_time = None
             if audio_interrupt_callback:
                 await audio_interrupt_callback()
 

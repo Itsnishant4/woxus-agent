@@ -37,6 +37,7 @@ win:
     - nsis
   artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
+  icon: ../icons/icon.png
   target:
     - AppImage
   artifactName: ${productName}-${version}-${arch}.${ext}

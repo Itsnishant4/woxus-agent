@@ -9,14 +9,12 @@ jobs:
   build-backend:
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [macos-latest, windows-latest]
         include:
           - os: macos-latest
             artifact: backend-dist-macos
           - os: windows-latest
             artifact: backend-dist-windows
-          - os: ubuntu-latest
-            artifact: backend-dist-linux
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -44,14 +42,12 @@ jobs:
     needs: build-backend
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [macos-latest, windows-latest]
         include:
           - os: macos-latest
             artifact: backend-dist-macos
           - os: windows-latest
             artifact: backend-dist-windows
-          - os: ubuntu-latest
-            artifact: backend-dist-linux
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -77,8 +73,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # electron-builder publishes: writes latest.yml / latest-mac.yml /
-      # latest-linux.yml + blockmaps, uploads artifacts to GitHub Releases.
+      # electron-builder publishes: writes latest.yml / latest-mac.yml +
+      # blockmaps, uploads artifacts to GitHub Releases.
       # extraResources ships the PyInstaller backend inside the app.
       # electron:release = --publish always (GH_TOKEN from secrets).
       - run: pnpm run electron:release

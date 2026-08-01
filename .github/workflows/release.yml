@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
 
+# Required so the GITHUB_TOKEN can create/upload to GitHub Releases.
+# Without this, electron-builder gets 403 Forbidden on publish.
+permissions:
+  contents: write
+
 jobs:
   build-backend:
     strategy:

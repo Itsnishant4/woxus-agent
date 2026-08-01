@@ -5,6 +5,7 @@ import {
   PanelLeft, Zap, ListChecks, Keyboard, Mic,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
+import { API_BASE } from '@/services/api';
 import HomePage from '@pages/HomePage';
 import SettingsPage from '@pages/SettingsPage';
 import MemoryPage from '@pages/MemoryPage';
@@ -12,6 +13,7 @@ import OverlayPage from '@pages/OverlayPage';
 import OrbPage from '@pages/OrbPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
+import PermissionGatePage from '@pages/PermissionGatePage';
 import Toaster from '@components/Toast';
 import ModelDownloadScreen from '@components/ModelDownloadScreen';
 import { useTheme } from '@/hooks/useTheme';
@@ -115,21 +117,27 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [permissionOk, setPermissionOk] = useState<boolean | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   const checkModelStatus = useCallback(async () => {
-    try {
-      const res = await window.fetch('/api/model/status');
-      const data = await res.json();
-      if (data.installed) {
-        setModelReady(true);
-      } else {
-        setModelReady(false);
+    let attempts = 0;
+    while (attempts < 20) {
+      try {
+        const res = await window.fetch(`${API_BASE}/model/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setModelReady(Boolean(data.installed));
+          return;
+        }
+      } catch {
+        // backend not up yet — retry
       }
-    } catch {
-      setModelReady(false);
+      attempts += 1;
+      await new Promise((r) => setTimeout(r, 1000));
     }
+    setModelReady(false);
   }, []);
 
   useEffect(() => {
@@ -137,26 +145,67 @@ export default function App() {
   }, [checkModelStatus]);
 
   const checkLicense = useCallback(async () => {
-    // @ts-ignore
-    const result = await window.electronAPI?.getLicenseStatus?.();
-    if (!result) { setAppStatus('unlicensed'); return; }
+    let attempts = 0;
+    while (true) {
+      // @ts-ignore
+      const result = await window.electronAPI?.getLicenseStatus?.();
+      if (!result) {
+        setAppStatus('unlicensed');
+        return;
+      }
 
-    if (result.status === 'licensed') {
-      setAppStatus('licensed');
-      return;
+      if (result.status === 'licensed') {
+        // Offline-cache result — wait for the backend so revocations
+        // can't be bypassed by starting before verification completes.
+        if (!result.offline) {
+          setAppStatus('licensed');
+          return;
+        }
+        if (attempts >= 30) {
+          setAppStatus('licensed');
+          return;
+        }
+      } else if (result.status === 'trial') {
+        setAppStatus('trial');
+        return;
+      } else {
+        setAppStatus('unlicensed');
+        return;
+      }
+
+      attempts += 1;
+      await new Promise((r) => setTimeout(r, 1000));
     }
-
-    if (result.status === 'trial') {
-      setAppStatus('trial');
-      return;
-    }
-
-    setAppStatus('unlicensed');
   }, []);
 
   useEffect(() => {
     checkLicense();
   }, [checkLicense]);
+
+  const checkPermission = useCallback(async () => {
+    // @ts-ignore
+    const status = await window.electronAPI?.getPermissionStatus?.();
+    if (!status) {
+      setPermissionOk(true);
+      return;
+    }
+    if (status.os !== 'macos' || status.ok) {
+      setPermissionOk(true);
+      return;
+    }
+    setPermissionOk(false);
+  }, []);
+
+  useEffect(() => {
+    checkPermission();
+    const interval = setInterval(checkPermission, 2000);
+    const onFocus = () => checkPermission();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [checkPermission]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -182,6 +231,10 @@ export default function App() {
   }
 
   const s = statusConfig[agentStatus];
+
+  if (permissionOk === false) {
+    return <PermissionGatePage />;
+  }
 
   if (modelReady === false) {
     return <ModelDownloadScreen onComplete={() => setModelReady(true)} />;

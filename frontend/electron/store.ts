@@ -21,6 +21,8 @@ const store = new Store({
     licenseKey: '',
     trialEmail: '',
     trialStartedAt: 0,
+    apiKey: '',
+    geminiModel: '',
     cachedLicenseStatus: null as CachedLicense | null,
     cachedTrialStatus: null as CachedTrial | null,
   },
@@ -30,6 +32,8 @@ const store = new Store({
     licenseKey: { type: 'string', default: '' },
     trialEmail: { type: 'string', default: '' },
     trialStartedAt: { type: 'number', default: 0 },
+    apiKey: { type: 'string', default: '' },
+    geminiModel: { type: 'string', default: '' },
     cachedLicenseStatus: { type: ['object', 'null'], default: null },
     cachedTrialStatus: { type: ['object', 'null'], default: null },
   },
@@ -50,6 +54,12 @@ export const settingsStore = {
 
   getTrialStartedAt: (): number => store.get('trialStartedAt') as number,
   setTrialStartedAt: (ts: number): void => store.set('trialStartedAt', ts),
+
+  getApiKey: (): string => store.get('apiKey') as string,
+  setApiKey: (key: string): void => store.set('apiKey', key),
+
+  getGeminiModel: (): string => store.get('geminiModel') as string,
+  setGeminiModel: (model: string): void => store.set('geminiModel', model),
 
   getCachedLicenseStatus: (): CachedLicense | null => store.get('cachedLicenseStatus') as CachedLicense | null,
   setCachedLicenseStatus: (status: CachedLicense | null): void => store.set('cachedLicenseStatus', status),

@@ -1,13 +1,14 @@
 import json
 import logging
 import os
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from typing import Optional
+
+from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = woxus_data_dir()
 TRIAL_FILE = DATA_DIR / "trials.json"
 TRIAL_DURATION_SECONDS = 600
 

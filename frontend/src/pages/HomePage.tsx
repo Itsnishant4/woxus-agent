@@ -3,6 +3,7 @@ import { useVoiceStore } from '../store/voice';
 import { startVoiceSession, stopVoiceSession } from '../services/voice';
 import { Loader2, Terminal } from 'lucide-react';
 import ModelDownloadBanner from '../components/ModelDownloadBanner';
+import { API_BASE } from '../services/api';
 
 interface Task {
   task_id: string;
@@ -14,7 +15,7 @@ interface Task {
   elapsed_seconds: number;
 }
 
-const API = '/api';
+const API = API_BASE;
 
 export default function HomePage() {
   const { connected, isListening, sttStatus } = useVoiceStore();

@@ -1,13 +1,14 @@
 import json
-import uuid
 import logging
+import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
+
+from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = woxus_data_dir()
 MEMORY_FILE = DATA_DIR / "memories.json"
 
 

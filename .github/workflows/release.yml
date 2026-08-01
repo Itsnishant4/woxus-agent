@@ -6,10 +6,52 @@ on:
       - "v*"
 
 jobs:
-  release:
+  build-backend:
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            artifact: backend-dist-macos
+          - os: windows-latest
+            artifact: backend-dist-windows
+          - os: ubuntu-latest
+            artifact: backend-dist-linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt pyinstaller
+
+      # PyInstaller one-folder bundle → dist/woxus-backend/
+      - run: python -m PyInstaller woxus_backend.spec --noconfirm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: backend/dist/woxus-backend
+
+  release:
+    needs: build-backend
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            artifact: backend-dist-macos
+          - os: windows-latest
+            artifact: backend-dist-windows
+          - os: ubuntu-latest
+            artifact: backend-dist-linux
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -28,13 +70,16 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: frontend/pnpm-lock.yaml
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: frontend/backend/dist/woxus-backend
+
       - run: pnpm install --frozen-lockfile
 
+      # electron-builder self-publishes: writes latest.yml / latest-mac.yml /
+      # latest-linux.yml + blockmaps, uploads artifacts to GitHub Releases.
+      # extraResources ships the PyInstaller backend inside the app.
       - run: pnpm run electron:package
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: frontend/release/*
-          generate_release_notes: true

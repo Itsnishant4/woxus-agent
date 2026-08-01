@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAutoLaunch: (enable: boolean) => ipcRenderer.invoke('set-auto-launch', enable),
   getGlobalHotkey: () => ipcRenderer.invoke('get-global-hotkey'),
   setGlobalHotkey: (hotkey: string) => ipcRenderer.invoke('set-global-hotkey', hotkey),
+  getApiKey: () => ipcRenderer.invoke('get-api-key'),
+  setApiKey: (key: string) => ipcRenderer.invoke('set-api-key', key),
+  getGeminiModel: () => ipcRenderer.invoke('get-gemini-model'),
+  setGeminiModel: (model: string) => ipcRenderer.invoke('set-gemini-model', model),
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
   toggleMainWindow: () => ipcRenderer.send('orb-toggle-main'),
   platform: process.platform,
@@ -17,4 +21,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTrialStatus: () => ipcRenderer.invoke('trial:status'),
   startTrial: (email: string) => ipcRenderer.invoke('trial:start', email),
   submitFeedback: (rating: number, text: string) => ipcRenderer.invoke('feedback:submit', rating, text),
+
+  // Auto-update
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (callback: (state: unknown) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on('update:status', listener);
+    return () => ipcRenderer.removeListener('update:status', listener);
+  },
+
+  // Prompt paste (nut.js)
+  agentPaste: (text: string) => ipcRenderer.invoke('agent:paste', text),
+  agentActiveWindow: () => ipcRenderer.invoke('agent:active-window'),
+
+  // Automation permission (macOS Accessibility)
+  getPermissionStatus: () => ipcRenderer.invoke('permission:check'),
+  openPermissionSettings: () => ipcRenderer.invoke('permission:open-settings'),
 });

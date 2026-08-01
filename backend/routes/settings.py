@@ -1,16 +1,16 @@
-import os
 import json
 import logging
-from pathlib import Path
+import os
 
 from fastapi import APIRouter
 
-from ..models.schemas import ApiKeyUpdate, ApiKeyStatus, SettingsOut
+from ..models.schemas import ApiKeyStatus, ApiKeyUpdate, SettingsOut
+from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-SETTINGS_FILE = Path(__file__).resolve().parent.parent / "data" / "settings.json"
+SETTINGS_FILE = woxus_data_dir() / "settings.json"
 
 
 def _load_settings() -> dict:

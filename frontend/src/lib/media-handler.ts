@@ -20,6 +20,19 @@ export class MediaHandler {
   private videoCanvas = document.createElement("canvas");
   private canvasCtx = this.videoCanvas.getContext("2d")!;
 
+  // Mic ducking — while the model's reply is playing, its own voice hits the
+  // mic, so we drop audio during playback to avoid Gemini hearing itself.
+  // Otherwise we stream continuously (the reference app does the same) and let
+  // Gemini's server-side VAD + TURN_INCLUDES_ONLY_ACTIVITY decide turn bounds.
+  // The previous silence gate (cut mic after 800ms quiet) starved Gemini of
+  // audio so it never recognized speech — that's why responses never came.
+  private modelSpeaking = false;
+
+  private shouldSendAudio() {
+    // While the model's reply is playing, drop audio (mic ducking only).
+    return !this.modelSpeaking;
+  }
+
   async initializeAudio() {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext ||
@@ -29,7 +42,7 @@ export class MediaHandler {
         this.audioContext.audioWorklet &&
         typeof AudioWorkletNode !== "undefined"
       ) {
-        await this.audioContext.audioWorklet.addModule("/pcm-processor.js");
+        await this.audioContext.audioWorklet.addModule("./pcm-processor.js");
       } else {
         console.warn(
           "AudioWorklet not available, using ScriptProcessorNode fallback"
@@ -65,8 +78,10 @@ export class MediaHandler {
         );
         this.audioWorkletNode.port.onmessage = (event) => {
           if (this.isRecording) {
+            const workletData = event.data as Float32Array;
+            if (!this.shouldSendAudio()) return;
             const downsampled = this.downsampleBuffer(
-              event.data as Float32Array,
+              workletData,
               this.audioContext!.sampleRate,
               16000
             );
@@ -85,6 +100,7 @@ export class MediaHandler {
         processor.onaudioprocess = (event) => {
           if (this.isRecording) {
             const inputData = event.inputBuffer.getChannelData(0);
+            if (!this.shouldSendAudio()) return;
             const downsampled = this.downsampleBuffer(
               inputData,
               this.audioContext!.sampleRate,
@@ -115,6 +131,7 @@ export class MediaHandler {
 
   stopAudio() {
     this.isRecording = false;
+    this.modelSpeaking = false;
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach((t) => t.stop());
       this.mediaStream = null;
@@ -225,10 +242,15 @@ export class MediaHandler {
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;
 
+    // Duck mic while this reply plays so Gemini doesn't hear its own voice.
+    this.modelSpeaking = true;
     this.scheduledSources.push(source);
     source.onended = () => {
       const idx = this.scheduledSources.indexOf(source);
       if (idx > -1) this.scheduledSources.splice(idx, 1);
+      if (this.scheduledSources.length === 0) {
+        this.modelSpeaking = false;
+      }
     };
   }
 
@@ -240,6 +262,7 @@ export class MediaHandler {
       } catch (_) {}
     });
     this.scheduledSources = [];
+    this.modelSpeaking = false;
     if (this.audioContext) {
       this.nextStartTime = this.audioContext.currentTime;
     }

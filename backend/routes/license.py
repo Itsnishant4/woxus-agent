@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ..models.schemas import LicenseVerifyRequest, LicenseVerifyResponse
-from ..services.license import verify_key, generate_key
+from ..services.license import generate_key, verify_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,6 +20,7 @@ async def license_verify(req: LicenseVerifyRequest):
         expiry=result.get("expiry"),
         features=result.get("features", []),
         reason=result.get("reason"),
+        offline=result.get("offline"),
     )
 
 

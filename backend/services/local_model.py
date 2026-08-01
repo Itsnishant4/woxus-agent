@@ -342,7 +342,58 @@ async def run_local_mini_agent(prompt: str) -> dict:
                 }
 
             if action == "tool":
-                command = str((decision.get("args") or {}).get("command") or "").strip()
+                tool_name = str((decision or {}).get("tool") or "terminal")
+                args = (decision or {}).get("args") or {}
+                if tool_name == "write_to_focused_input":
+                    text = str(args.get("text") or "").strip()
+                    if not text:
+                        messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                        messages.append({"role": "user", "content": "That write_to_focused_input call was empty. Provide the exact text."})
+                        continue
+                    tools_executed.append(f"write_to_focused_input: {text[:40]}")
+                    logger.info("🤖 [LOCAL MINI AGENT] Writing to focused input (%d/5)", step)
+                    res = await _execute_tool_raw("write_to_focused_input", {
+                        "text": text,
+                        "_from_mini_agent": True,
+                    })
+                    last_result = res.get("text") or res.get("error") or "Written to focused input."
+                    execution_trace.append({
+                        "attempt": step,
+                        "tool": "write_to_focused_input",
+                        "command": text[:80],
+                        "exit_code": 0 if res.get("ok") else 1,
+                        "stdout": "Written to focused input",
+                        "stderr": res.get("error", ""),
+                        "status": "success" if res.get("ok") else "failed",
+                    })
+                    # Return the paste payload directly so the frontend can
+                    # detect action==='paste' and call agentPaste via nut.js.
+                    if res.get("ok"):
+                        return {
+                            "status": "success",
+                            "device": hw_info["device"],
+                            "prompt": prompt,
+                            "attempts_count": step,
+                            "tools_executed": tools_executed,
+                            "execution_trace": execution_trace,
+                            "action": "paste",
+                            "text": text,
+                            "mini_agent_output": last_result,
+                            "message": last_result,
+                        }
+                    return {
+                        "status": "failed",
+                        "device": hw_info["device"],
+                        "prompt": prompt,
+                        "attempts_count": step,
+                        "tools_executed": tools_executed,
+                        "execution_trace": execution_trace,
+                        "mini_agent_output": res.get("error", "Write failed"),
+                        "message": res.get("error", "Write failed"),
+                    }
+
+                # Default: terminal tool
+                command = str(args.get("command") or "").strip()
                 if not command:
                     messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
                     messages.append({"role": "user", "content": "That tool call was empty. Call a tool properly or answer."})

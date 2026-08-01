@@ -6,7 +6,6 @@ The Main Agent ONLY has access to `delegate_task_to_mini_agent` to delegate exec
 
 from google.genai import types
 
-
 # --- Delegate Task Tool (Primary Main Agent Tool) ---
 
 delegate_task_declaration = types.FunctionDeclaration(
@@ -191,12 +190,16 @@ memory_delete_declaration = types.FunctionDeclaration(
 
 
 # --- Tool list for registering with Gemini Main Agent ---
+#
+# The main agent delegates computer tasks to the mini agent, AND can save /
+# read long-term memory via the memory tools. This is how Woxus learns facts
+# like "User prefers to converse in Gujarati" — the memory then gets injected
+# into the system prompt on the next session.
 
 agent_tools = [
     types.Tool(function_declarations=[
         delegate_task_declaration,
         memory_create_declaration,
         memory_list_declaration,
-        memory_delete_declaration,
     ]),
 ]

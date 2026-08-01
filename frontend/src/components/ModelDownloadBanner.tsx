@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Download } from 'lucide-react';
+import { API_BASE } from '@/services/api';
 
 interface ModelStatus {
   model_name: string;
@@ -17,13 +18,13 @@ export default function ModelDownloadBanner() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await window.fetch('/api/model/status');
+        const res = await window.fetch(`${API_BASE}/model/status`);
         const data = await res.json();
         setStatus(data);
 
         // Auto-trigger download if not installed and not downloading
         if (!data.installed && !data.downloading) {
-          await window.fetch('/api/model/download', { method: 'POST' });
+          await window.fetch(`${API_BASE}/model/download`, { method: 'POST' });
         }
         if (data.installed) {
           clearInterval(interval);

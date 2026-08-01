@@ -1,9 +1,12 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, screen } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, screen, type NativeImage } from 'electron';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
 import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
+import { initAutoUpdater, checkForUpdates, installUpdate, UpdateStatus } from './updaterService.js';
+import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
+import { checkPermission, openPermissionSettings } from './permissionService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -188,6 +191,7 @@ function registerGlobalHotkey() {
         } else {
           overlayWindow.show();
           overlayWindow.focus();
+          saveActiveWindow();
         }
       }
     });
@@ -196,13 +200,29 @@ function registerGlobalHotkey() {
   }
 }
 
+let permissionPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function startPermissionPoller() {
+  if (permissionPollTimer) return;
+  permissionPollTimer = setInterval(() => {
+    if (checkPermission().ok) {
+      if (permissionPollTimer) {
+        clearInterval(permissionPollTimer);
+        permissionPollTimer = null;
+      }
+      registerGlobalHotkey();
+    }
+  }, 2000);
+}
+
 
 function createTray() {
-  const trayIconFile = process.platform === 'darwin' ? 'tray-icon.png' : 'tray-icon-32.png';
-  let icon = nativeImage.createFromPath(iconPath(trayIconFile));
+  let icon: NativeImage;
   if (process.platform === 'darwin') {
-    icon = icon.resize({ width: 22, height: 22 });
+    icon = nativeImage.createFromPath(iconPath('tray-icon.png')).resize({ width: 18, height: 18 });
     icon.setTemplateImage(true);
+  } else {
+    icon = nativeImage.createFromPath(iconPath('tray', 'tray-icon-32.png'));
   }
   tray = new Tray(icon);
   tray.setToolTip('Woxus Agent');
@@ -264,7 +284,18 @@ app.whenReady().then(async () => {
   createOverlayWindow();
   createOrbWindows();
   createTray();
-  registerGlobalHotkey();
+  // Gate the global hotkey (and paste automation) behind macOS Accessibility
+  // permission. Once granted, the poller re-registers it automatically.
+  if (process.platform === 'darwin' && !checkPermission().ok) {
+    startPermissionPoller();
+  } else {
+    registerGlobalHotkey();
+  }
+  initAutoUpdater((state: UpdateStatus) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('update:status', state);
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -291,10 +322,24 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  if (permissionPollTimer) {
+    clearInterval(permissionPollTimer);
+    permissionPollTimer = null;
+  }
   globalShortcut.unregisterAll();
 });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('update:check', () => {
+  checkForUpdates();
+  return true;
+});
+
+ipcMain.handle('update:install', () => {
+  installUpdate();
+  return true;
+});
 
 ipcMain.handle('get-auto-launch', () => {
   return settingsStore.getLaunchAtLogin();
@@ -317,12 +362,27 @@ ipcMain.handle('set-global-hotkey', (_event, hotkey: string) => {
   settingsStore.setGlobalHotkey(hotkey);
   registerGlobalHotkey();
 });
+
+ipcMain.handle('get-api-key', () => settingsStore.getApiKey());
+ipcMain.handle('set-api-key', (_event, key: string) => {
+  settingsStore.setApiKey(String(key));
+  return settingsStore.getApiKey();
+});
+ipcMain.handle('get-gemini-model', () => settingsStore.getGeminiModel());
+ipcMain.handle('set-gemini-model', (_event, model: string) => {
+  settingsStore.setGeminiModel(String(model));
+  return settingsStore.getGeminiModel();
+});
 ipcMain.on('hide-overlay', () => {
   overlayWindow?.hide();
 });
 
 // Orb click → toggle main window visibility
 ipcMain.on('orb-toggle-main', () => {
+  // Remember what was focused BEFORE we show/steal focus to Woxus, so a later
+  // paste can restore the user's previous window (their editor/terminal).
+  // Must run BEFORE mainWindow.show()+focus() or we'd capture Woxus itself.
+  saveActiveWindow();
   if (mainWindow?.isVisible() && !mainWindow.isMinimized()) {
     mainWindow.hide();
   } else {
@@ -343,3 +403,18 @@ ipcMain.handle('trial:status', () => getTrialStatus());
 ipcMain.handle('trial:start', (_event, email: string) => startTrial(email));
 
 ipcMain.handle('feedback:submit', (_event, rating: number, text: string) => submitFeedback(rating, text));
+
+// Prompt paste (nut.js) — restores focus to the pre-overlay window, then pastes
+ipcMain.handle('agent:paste', async (_event, text: string) => {
+  await restoreActiveWindow();
+  return pasteText(String(text));
+});
+
+ipcMain.handle('agent:active-window', () => getActiveWindowTitle());
+
+// Automation permission (macOS Accessibility)
+ipcMain.handle('permission:check', () => checkPermission());
+ipcMain.handle('permission:open-settings', () => {
+  openPermissionSettings();
+  return checkPermission();
+});

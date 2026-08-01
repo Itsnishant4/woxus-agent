@@ -13,6 +13,7 @@ import OverlayPage from '@pages/OverlayPage';
 import OrbPage from '@pages/OrbPage';
 import TasksPage from '@pages/TasksPage';
 import LicensePage from '@pages/LicensePage';
+import PermissionGatePage from '@pages/PermissionGatePage';
 import Toaster from '@components/Toast';
 import ModelDownloadScreen from '@components/ModelDownloadScreen';
 import { useTheme } from '@/hooks/useTheme';
@@ -116,6 +117,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [permissionOk, setPermissionOk] = useState<boolean | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -180,6 +182,31 @@ export default function App() {
     checkLicense();
   }, [checkLicense]);
 
+  const checkPermission = useCallback(async () => {
+    // @ts-ignore
+    const status = await window.electronAPI?.getPermissionStatus?.();
+    if (!status) {
+      setPermissionOk(true);
+      return;
+    }
+    if (status.os !== 'macos' || status.ok) {
+      setPermissionOk(true);
+      return;
+    }
+    setPermissionOk(false);
+  }, []);
+
+  useEffect(() => {
+    checkPermission();
+    const interval = setInterval(checkPermission, 2000);
+    const onFocus = () => checkPermission();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [checkPermission]);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -204,6 +231,10 @@ export default function App() {
   }
 
   const s = statusConfig[agentStatus];
+
+  if (permissionOk === false) {
+    return <PermissionGatePage />;
+  }
 
   if (modelReady === false) {
     return <ModelDownloadScreen onComplete={() => setModelReady(true)} />;

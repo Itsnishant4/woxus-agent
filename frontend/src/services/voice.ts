@@ -23,6 +23,10 @@ let geminiClient: GeminiClient | null = null;
 let _connectingLock = false;
 let _retryLock = false;
 let _serverError = false;
+// Set when the user intentionally stops the session (orb click). The WebSocket
+// close fires onClose — this flag tells that handler the disconnect was
+// deliberate so it does NOT auto-reconnect.
+let _intentionalStop = false;
 
 export type TranscriptionHandler = (role: string, text: string) => void;
 
@@ -45,6 +49,9 @@ export async function startVoiceSession(
   return new Promise((resolve, reject) => {
     // Clean up any previous session
     stopVoiceSession();
+    // A fresh session is being started — clear the intentional-stop flag so a
+    // later abnormal drop still triggers reconnect.
+    _intentionalStop = false;
 
     geminiClient = new GeminiClient({
       onOpen: async () => {
@@ -60,6 +67,16 @@ export async function startVoiceSession(
             }
           });
           store.setMicActive(true);
+
+          // Greet the user on connect so Woxus speaks first — the user
+          // shouldn't have to speak to start the conversation. This is the
+          // same pattern the reference app uses (sends a hidden instruction
+          // on WebSocket open). Sent as a real text turn so Gemini replies
+          // with voice immediately.
+          if (geminiClient?.isConnected()) {
+            geminiClient.sendText('Greet me.');
+          }
+
           resolve();
         } catch (e) {
           _connectingLock = false;
@@ -89,6 +106,14 @@ export async function startVoiceSession(
         store.setListening(false);
         mediaHandler.stopAudio();
         store.setMicActive(false);
+
+        // If the user stopped the session deliberately (orb click), do NOT
+        // reconnect — reconnecting is only for unexpected drops mid-session.
+        if (_intentionalStop) {
+          _intentionalStop = false;
+          console.log('Voice session stopped by user — not reconnecting');
+          return;
+        }
 
         // Backend already retried with history replay; only reconnect once on
         // abnormal drops, and never after a server-reported error.
@@ -126,6 +151,8 @@ export async function startVoiceSession(
  * Stop the voice session and clean up.
  */
 export function stopVoiceSession(): void {
+  // Mark intentional so onClose does NOT auto-reconnect.
+  _intentionalStop = true;
   mediaHandler.stopAudio();
   mediaHandler.stopAudioPlayback();
   geminiClient?.disconnect();
@@ -193,6 +220,37 @@ function handleJsonMessage(
       console.error('Gemini Live error:', msg.message);
       _serverError = true;
       toast.error(String(msg.message || 'Voice session failed'));
+      break;
+
+    case 'tool_result':
+      // A background tool (delegated mini-agent task) finished.
+      const toolResult = msg.result || {};
+      if (toolResult.action === 'paste' && toolResult.text) {
+        // Write the generated prompt into the focused app via nut.js.
+        console.log('📋 [TOOL RESULT] Pasting prompt into focused app');
+        // @ts-ignore
+        const pastePromise = window.electronAPI?.agentPaste?.(toolResult.text);
+        if (pastePromise?.then) {
+          pastePromise.then((res: any) => {
+            if (res?.ok) {
+              toast.success('✓ Prompt pasted into your app');
+            } else if (res?.clipboard) {
+              toast.error('Paste failed — prompt is on your clipboard. Press Cmd+V in your app.');
+            } else {
+              toast.error(`Paste failed: ${res?.error || 'unknown error'}`);
+            }
+          }).catch(() => {
+            toast.error('Paste failed');
+          });
+        } else {
+          // Not in Electron (plain browser) — can't paste, only logged.
+          console.warn('[tool_result] agentPaste not available — running in browser?');
+        }
+      } else {
+        const summary =
+          toolResult.message || toolResult.mini_agent_output || toolResult.error || 'done';
+        store.addTranscript('system', `✓ ${msg.name}: ${String(summary).slice(0, 200)}`);
+      }
       break;
 
     default:

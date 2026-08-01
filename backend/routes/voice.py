@@ -13,9 +13,40 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from ..config import get_api_keys
 from ..services.gemini_live import GeminiLiveService
 from ..services.tool_definitions import agent_tools
+from ..services.memory_engine import list_memories
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# System instruction tuned for low latency.
+#
+# CRITICAL: Casual conversation (greetings, questions, small talk) must be
+# answered DIRECTLY in voice — never routed through delegate_task_to_mini_agent.
+# Delegating every turn to the local 3B model + shell execution is what caused
+# the multi-second delays. Tool delegation is reserved for actual computer tasks
+# (file/folder/terminal/build operations), and even then the model speaks a
+# brief ack first so the user hears something immediately.
+SYSTEM_INSTRUCTION = (
+    "You are Woxus, a smart and friendly voice assistant living on the user's "
+    "computer. Keep spoken responses short and natural. Do NOT use markdown, "
+    "bold, or headings — you are speaking, not writing.\n\n"
+    "DECISION RULES (follow strictly):\n"
+    "1. CASUAL / INFORMATION (hello, how are you, what is X, jokes, advice, "
+    "reminders, opinions, small talk): Answer DIRECTLY in voice immediately. "
+    "NEVER call any tool for these. Respond the instant you understand the user.\n"
+    "2. COMPUTER TASKS only (create folder/project, install packages, run a build, "
+    "read/write files, terminal work, list desktop contents): Speak a SHORT "
+    "acknowledgment first ('One moment.' / 'Checking that.'), THEN call "
+    "delegate_task_to_mini_agent(task_prompt='...'), THEN report the result in "
+    "a second voice turn.\n"
+    "3. MEMORY: If the user tells you a durable fact about themselves (name, "
+    "preferred language, preferences, habits, projects, goals) or asks you to "
+    "'remember' something, call memory_create(content='...') to save it. Only "
+    "do this when the user explicitly shares a lasting fact — never on small talk.\n"
+    "4. Never invent file names or paths — if you need real computer state, "
+    "delegate to the agent which checks with tools.\n"
+    "5. Keep every spoken response natural, clear, and conversational."
+)
 
 
 @router.websocket("/live")
@@ -45,7 +76,6 @@ async def gemini_live_websocket(websocket: WebSocket):
     async def transcription_callback(role: str, text: str):
         """Send speech transcription to frontend for UI display."""
         try:
-            logger.info("Sending to frontend: type=%s text=%s", role, text[:100])
             await websocket.send_json({"type": role, "text": text})
         except Exception:
             logger.debug("Failed to send transcription")
@@ -64,6 +94,15 @@ async def gemini_live_websocket(websocket: WebSocket):
         except Exception:
             logger.debug("Failed to send latency log")
 
+    async def tool_result_callback(name: str, result: dict):
+        """Forward a completed background tool result to the frontend. The
+        frontend pastes it (if it's a paste action) or shows an info line."""
+        try:
+            await websocket.send_json({"type": "tool_result", "name": name, "result": result})
+            logger.info("🛠️ [TOOL RESULT] %s -> %s", name, str(result)[:200])
+        except Exception:
+            logger.debug("Failed to send tool result")
+
     config = websocket.app.state.config
     gemini_api_keys = get_api_keys()
     if all(k == "YOUR_GEMINI_API_KEY" for k in gemini_api_keys):
@@ -76,14 +115,21 @@ async def gemini_live_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
-    system_instruction = (
-        "You are Woxus, a voice assistant. Keep spoken responses short and natural. "
-        "Do NOT read stored memories or call any memory/list tools.\n\n"
-        "CONVERSATIONAL WORKFLOW RULES:\n"
-        "1. FIRST RESPONSE: When the user asks a question or gives a command, speak a short acknowledgment FIRST (e.g. 'Wait, I am checking your Desktop now.' or 'Creating that for you now.').\n"
-        "2. TOOL DELEGATION: Call `delegate_task_to_mini_agent(task_prompt='...')` to run the task via the Local Mini Agent.\n"
-        "3. SECOND RESPONSE: After the Local Mini Agent completes and returns the output, speak the final result clearly (e.g. 'Your Desktop has folders woxus-core, projects, and notes.').\n"
-        "4. Keep spoken responses natural, clear, and conversational. Do NOT use markdown, bold, or headings."
+    # Inject stored memories into the system prompt so Woxus always knows
+    # them from the very first turn — e.g. "User prefers to converse in
+    # Gujarati" → Woxus greets and responds in Gujarati from the start.
+    try:
+        memories = list_memories()
+        mem_lines = "\n".join(f"- {m['content']}" for m in memories) if memories else "None yet."
+    except Exception as e:
+        logger.warning("Memory injection failed: %s", e)
+        mem_lines = "None yet."
+
+    system_instruction = SYSTEM_INSTRUCTION + (
+        "\n\nPERSISTENT USER MEMORY (always follow these — they are facts about the user):\n"
+        f"{mem_lines}\n"
+        "Examples: if memory says the user prefers Gujarati, respond in Gujarati; "
+        "if it records a name, use it; if it records a preference, honor it."
     )
 
     gemini_client = GeminiLiveService(
@@ -136,6 +182,7 @@ async def gemini_live_websocket(websocket: WebSocket):
                 audio_interrupt_callback=audio_interrupt_callback,
                 transcription_callback=transcription_callback,
                 latency_callback=latency_callback,
+                tool_result_callback=tool_result_callback,
             ),
         )
     except Exception as e:

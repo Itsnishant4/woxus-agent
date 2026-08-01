@@ -30,4 +30,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update:status', listener);
     return () => ipcRenderer.removeListener('update:status', listener);
   },
+
+  // Prompt paste (nut.js)
+  agentPaste: (text: string) => ipcRenderer.invoke('agent:paste', text),
+  agentActiveWindow: () => ipcRenderer.invoke('agent:active-window'),
+
+  // Automation permission (macOS Accessibility)
+  getPermissionStatus: () => ipcRenderer.invoke('permission:check'),
+  openPermissionSettings: () => ipcRenderer.invoke('permission:open-settings'),
 });

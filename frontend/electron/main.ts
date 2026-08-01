@@ -5,6 +5,8 @@ import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
 import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
 import { initAutoUpdater, checkForUpdates, installUpdate, UpdateStatus } from './updaterService.js';
+import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
+import { checkPermission, openPermissionSettings } from './permissionService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -189,12 +191,28 @@ function registerGlobalHotkey() {
         } else {
           overlayWindow.show();
           overlayWindow.focus();
+          saveActiveWindow();
         }
       }
     });
   } catch (err) {
     console.error('Failed to register global hotkey:', err);
   }
+}
+
+let permissionPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function startPermissionPoller() {
+  if (permissionPollTimer) return;
+  permissionPollTimer = setInterval(() => {
+    if (checkPermission().ok) {
+      if (permissionPollTimer) {
+        clearInterval(permissionPollTimer);
+        permissionPollTimer = null;
+      }
+      registerGlobalHotkey();
+    }
+  }, 2000);
 }
 
 
@@ -266,7 +284,13 @@ app.whenReady().then(async () => {
   createOverlayWindow();
   createOrbWindows();
   createTray();
-  registerGlobalHotkey();
+  // Gate the global hotkey (and paste automation) behind macOS Accessibility
+  // permission. Once granted, the poller re-registers it automatically.
+  if (process.platform === 'darwin' && !checkPermission().ok) {
+    startPermissionPoller();
+  } else {
+    registerGlobalHotkey();
+  }
   initAutoUpdater((state: UpdateStatus) => {
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send('update:status', state);
@@ -298,6 +322,10 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  if (permissionPollTimer) {
+    clearInterval(permissionPollTimer);
+    permissionPollTimer = null;
+  }
   globalShortcut.unregisterAll();
 });
 
@@ -351,6 +379,10 @@ ipcMain.on('hide-overlay', () => {
 
 // Orb click → toggle main window visibility
 ipcMain.on('orb-toggle-main', () => {
+  // Remember what was focused BEFORE we show/steal focus to Woxus, so a later
+  // paste can restore the user's previous window (their editor/terminal).
+  // Must run BEFORE mainWindow.show()+focus() or we'd capture Woxus itself.
+  saveActiveWindow();
   if (mainWindow?.isVisible() && !mainWindow.isMinimized()) {
     mainWindow.hide();
   } else {
@@ -371,3 +403,18 @@ ipcMain.handle('trial:status', () => getTrialStatus());
 ipcMain.handle('trial:start', (_event, email: string) => startTrial(email));
 
 ipcMain.handle('feedback:submit', (_event, rating: number, text: string) => submitFeedback(rating, text));
+
+// Prompt paste (nut.js) — restores focus to the pre-overlay window, then pastes
+ipcMain.handle('agent:paste', async (_event, text: string) => {
+  await restoreActiveWindow();
+  return pasteText(String(text));
+});
+
+ipcMain.handle('agent:active-window', () => getActiveWindowTitle());
+
+// Automation permission (macOS Accessibility)
+ipcMain.handle('permission:check', () => checkPermission());
+ipcMain.handle('permission:open-settings', () => {
+  openPermissionSettings();
+  return checkPermission();
+});

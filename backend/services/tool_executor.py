@@ -50,7 +50,17 @@ async def handle_tool_call(name: str, args: dict) -> dict:
 
     try:
         if name == "delegate_task_to_mini_agent":
-            task_prompt = args.get("task_prompt", "")
+            task_prompt = str(args.get("task_prompt") or "").strip()
+            # Guard against spurious re-delegation: Gemini sometimes re-calls
+            # this tool with the mini agent's output as the "task_prompt" (e.g.
+            # {'output': {...}}). That's not a real task — reject it so we don't
+            # run an empty mini-agent job.
+            if not task_prompt or "output" in args:
+                logger.info("Skipping empty/malformed delegation (task_prompt=%r)", task_prompt[:60])
+                return {
+                    "status": "skipped",
+                    "message": "Task already completed — nothing to delegate.",
+                }
             from .local_model import run_local_mini_agent
             return await run_local_mini_agent(task_prompt)
         elif name == "terminal_exec":
@@ -65,6 +75,8 @@ async def handle_tool_call(name: str, args: dict) -> dict:
             return await _read_file(args)
         elif name == "list_directory":
             return _list_dir(args)
+        elif name == "write_to_focused_input":
+            return _write_to_focused_input(args)
         elif name == "memory_create":
             return await _memory_create(args)
         elif name == "memory_list":
@@ -191,6 +203,16 @@ def _list_dir(args: dict) -> dict:
         return {"success": True, "path": path, "items": items, "count": len(items)}
     except Exception as e:
         return {"error": str(e)}
+
+
+# --- Prompt Writer ---
+
+def _write_to_focused_input(args: dict) -> dict:
+    """Return a paste payload — the Electron side pastes it at the cursor."""
+    text = str(args.get("text") or "").strip()
+    if not text:
+        return {"error": "No text provided to write"}
+    return {"action": "paste", "text": text, "ok": True}
 
 
 # --- Memory ---

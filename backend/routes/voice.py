@@ -67,7 +67,7 @@ async def gemini_live_websocket(websocket: WebSocket):
 
     config = websocket.app.state.config
     gemini_api_keys = get_api_keys()
-    if gemini_api_keys == ["YOUR_GEMINI_API_KEY"]:
+    if all(k == "YOUR_GEMINI_API_KEY" for k in gemini_api_keys):
         gemini_api_keys = [config.get("GEMINI_API_KEY", "") or "YOUR_GEMINI_API_KEY"]
     gemini_models = ["gemini-2.5-flash-native-audio-preview-12-2025"]
     logger.info("Available Gemini Live models: %s", gemini_models)

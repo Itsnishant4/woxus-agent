@@ -114,6 +114,7 @@ class GeminiLiveService:
         injected into the system instruction."""
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(

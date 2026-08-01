@@ -122,10 +122,16 @@ class GeminiLiveService:
                     )
                 )
             ),
-            # NOTE: input/output_audio_transcription configs are NOT enabled —
-            # on gemini-2.5-flash-native-audio-preview-12-2025 they trigger a
-            # server-side 1007 (CONTENT_TYPE_AUDIO not supported) after the
-            # first turn. Transcriptions are unavailable on this model.
+            # Mirror the working reference app: the server ends speech turns
+            # based on actual audio activity (TURN_INCLUDES_ONLY_ACTIVITY), not
+            # on silence while mic background noise keeps streaming. Without this
+            # the default coverage keeps turns open — causing 20s+ latency / hangs.
+            realtime_input_config=types.RealtimeInputConfig(
+                turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
+            ),
+            # Per-utterance transcription for accurate STT + latency measurement.
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
             system_instruction=types.Content(parts=[
                 types.Part(text=self.system_instruction or (
                     "You are Woxus Main Agent.\n\n"

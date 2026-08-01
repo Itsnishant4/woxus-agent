@@ -35,3 +35,7 @@ jobs:
       - run: npx tsc --noEmit
 
       - run: pnpm run build
+
+      # Electron main-process check: typecheck + CJS named-import guard.
+      # Catches things that compile fine but crash in the packaged app.
+      - run: pnpm run check:electron

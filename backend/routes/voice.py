@@ -12,7 +12,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..config import get_api_keys
 from ..services.gemini_live import GeminiLiveService
-from ..services.memory_engine import list_memories
 from ..services.tool_definitions import agent_tools
 
 router = APIRouter()
@@ -77,43 +76,14 @@ async def gemini_live_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
-    memories = list_memories()
-    mem_lines = "\n".join(f"- {m['content']}" for m in memories) if memories else "None yet."
-
-    # Warm up the local whisper model for voice-turn history capture and
-    # surface the one-time model download to the UI (fire-and-forget so it
-    # never blocks session teardown).
-    stt_warmup_started = False
-
-    async def warmup_stt():
-        nonlocal stt_warmup_started
-        if stt_warmup_started:
-            return
-        stt_warmup_started = True
-        try:
-            from ..services.stt import _get_model, is_model_ready
-            if not is_model_ready():
-                logger.info("🎙️ [STT] Model not cached — notifying frontend of download")
-                await websocket.send_json({
-                    "type": "stt_downloading",
-                    "message": "Downloading speech recognition model (~75 MB, once)",
-                })
-            model = await asyncio.to_thread(_get_model)
-            if model is not None:
-                await websocket.send_json({"type": "stt_ready"})
-        except Exception as e:
-            logger.error("🎙️ [STT] Warmup failed: %s", e)
-
-    asyncio.get_running_loop().create_task(warmup_stt())
-
     system_instruction = (
-        "You are Woxus Main Agent.\n\n"
+        "You are Woxus, a voice assistant. Keep spoken responses short and natural. "
+        "Do NOT read stored memories or call any memory/list tools.\n\n"
         "CONVERSATIONAL WORKFLOW RULES:\n"
         "1. FIRST RESPONSE: When the user asks a question or gives a command, speak a short acknowledgment FIRST (e.g. 'Wait, I am checking your Desktop now.' or 'Creating that for you now.').\n"
         "2. TOOL DELEGATION: Call `delegate_task_to_mini_agent(task_prompt='...')` to run the task via the Local Mini Agent.\n"
         "3. SECOND RESPONSE: After the Local Mini Agent completes and returns the output, speak the final result clearly (e.g. 'Your Desktop has folders woxus-core, projects, and notes.').\n"
-        "4. Keep spoken responses natural, clear, and conversational. Do NOT use markdown, bold, or headings.\n\n"
-        f"STORED MEMORIES:\n{mem_lines}"
+        "4. Keep spoken responses natural, clear, and conversational. Do NOT use markdown, bold, or headings."
     )
 
     gemini_client = GeminiLiveService(

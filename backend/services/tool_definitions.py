@@ -6,7 +6,6 @@ The Main Agent ONLY has access to `delegate_task_to_mini_agent` to delegate exec
 
 from google.genai import types
 
-
 # --- Delegate Task Tool (Primary Main Agent Tool) ---
 
 delegate_task_declaration = types.FunctionDeclaration(
@@ -195,8 +194,5 @@ memory_delete_declaration = types.FunctionDeclaration(
 agent_tools = [
     types.Tool(function_declarations=[
         delegate_task_declaration,
-        memory_create_declaration,
-        memory_list_declaration,
-        memory_delete_declaration,
     ]),
 ]

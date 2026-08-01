@@ -17,7 +17,7 @@
  *   const require = createRequire(import.meta.url);
  *   const { autoUpdater } = require('electron-updater');
  */
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readdirSync, readFileSync, statSync, existsSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -50,6 +50,14 @@ function stripComments(src) {
 }
 
 let failed = false;
+
+if (!existsSync(distDir)) {
+  console.error(
+    `❌ [check-electron-imports] ${distDir} not found — compile the electron main ` +
+    `process first (tsc -p tsconfig.electron.json) before running this check.`
+  );
+  process.exit(1);
+}
 
 const files = listJsFiles(distDir);
 for (const file of files) {

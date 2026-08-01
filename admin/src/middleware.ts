@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 const publicPaths = ["/login", "/buy", "/api/auth/login", "/api/seed", "/api/verify-key", "/api/pricing", "/api/purchase/razorpay-order", "/api/purchase/razorpay-verify"];
 
 // Allowed CORS origin for the public buy/site app. Configure via SITE_ORIGIN.
-const siteOrigin = process.env.SITE_ORIGIN || "http://localhost:5174";
+const siteOrigin = process.env.SITE_ORIGIN || "https://woxus.vercel.app";
 
 function corsHeaders(): Record<string, string> {
   return {

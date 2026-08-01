@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Key, Clock, ExternalLink, Star, Send, AlertCircle, CheckCircle, MessageCircle } from "lucide-react";
 import { toast } from "@/components/Toast";
 
-const BUY_URL = import.meta.env.VITE_BUY_URL || "http://localhost:3000/buy";
+const BUY_URL = import.meta.env.VITE_BUY_URL || "https://woxus.vercel.app/buy";
 
 type PageState = "loading" | "unlicensed" | "trial" | "licensed";
 

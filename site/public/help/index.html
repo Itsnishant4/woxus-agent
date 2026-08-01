@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Woxus Help Documentation</title>
+    <meta name="description" content="Official documentation for Woxus — the AI desktop assistant. Voice, memory, automation, prompt writing, and more.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Plain CSS for the active nav state (CDN Tailwind can't process @apply) */
+        .active-nav {
+            background-color: #eff6ff;
+            color: #1e3a8a;
+            border-left: 3px solid #3b82f6;
+            font-weight: 600;
+        }
+        .nav-link { border-left: 3px solid transparent; }
+        /* Wrap long sidebar labels instead of clipping/overflowing */
+        /* .nav-link { white-space: normal; word-wrap: break-word; overflow-wrap: anywhere; } */
+        .prose code {
+            background-color: #f8fafc;
+            color: #475569;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            border: 1px solid #e2e8f0;
+            font-weight: 400;
+        }
+        .prose pre {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-size: 0.85rem;
+        }
+        .prose pre code { background: none; border: none; color: inherit; padding: 0; }
+        .prose th { background-color: #f1f5f9; }
+        .prose td, .prose th { border: 1px solid #e2e8f0; padding: 0.6rem 0.9rem; text-align: left; }
+        .prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        .kbd {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-bottom-width: 2px;
+            border-radius: 0.35rem;
+            background: #f8fafc;
+            font-size: 0.8rem;
+            font-family: ui-monospace, monospace;
+        }
+        html { scroll-behavior: smooth; }
+    </style>
+</head>
+<body class="bg-white text-gray-800 min-h-screen flex flex-col lg:flex-row">
+
+    <!-- Mobile top bar -->
+    <header class="lg:hidden flex items-center justify-between p-4 border-b border-gray-200 bg-white sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <div class="h-9 w-9 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <i class="fa-solid fa-robot text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-gray-900">Woxus Help</h1>
+                <p class="text-xs text-gray-500">Version 1.0.0</p>
+            </div>
+        </div>
+        <button id="mobile-menu-btn" class="p-2 rounded-md hover:bg-gray-100" aria-label="Open navigation">
+            <i class="fa-solid fa-bars text-xl text-gray-700"></i>
+        </button>
+    </header>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class=" border-r border-gray-200 flex-shrink-0 lg:sticky lg:top-0 lg:left-0 lg:h-screen hidden lg:flex flex-col bg-white">
+        <div class="p-6">
+            <div class="flex items-center space-x-4 mb-8">
+                <div class="h-10 w-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-robot text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900">Woxus Help</h1>
+                    <p class="text-sm text-gray-500">Version 1.0.0</p>
+                </div>
+            </div>
+            <nav class="mt-4">
+                <ul class="space-y-1">
+                    <li><a href="#" data-section="overview" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-overview"><i class="fa-solid fa-circle-info mr-3 text-blue-500"></i> Overview</a></li>
+                    <li><a href="#" data-section="getting-started" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-getting-started"><i class="fa-solid fa-play mr-3 text-blue-500"></i> Getting Started</a></li>
+                    <li><a href="#" data-section="voice" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-voice"><i class="fa-solid fa-microphone mr-3 text-blue-500"></i> Voice &amp; Conversation</a></li>
+                    <li><a href="#" data-section="prompt-writer" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-prompt-writer"><i class="fa-solid fa-pen-to-square mr-3 text-blue-500"></i> Prompt Writer</a></li>
+                    <li><a href="#" data-section="mini-agent" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-mini-agent"><i class="fa-solid fa-robot mr-3 text-blue-500"></i> Mini Agent &amp; Tasks</a></li>
+                    <li><a href="#" data-section="memory" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-memory"><i class="fa-solid fa-brain mr-3 text-blue-500"></i> Memory System</a></li>
+                    <li><a href="#" data-section="pages" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-pages"><i class="fa-solid fa-th-large mr-3 text-blue-500"></i> Pages &amp; Navigation</a></li>
+                    <li><a href="#" data-section="settings" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-settings"><i class="fa-solid fa-gear mr-3 text-blue-500"></i> Settings</a></li>
+                    <li><a href="#" data-section="shortcuts" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-shortcuts"><i class="fa-solid fa-keyboard mr-3 text-blue-500"></i> Keyboard Shortcuts</a></li>
+                    <li><a href="#" data-section="license" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-license"><i class="fa-solid fa-key mr-3 text-blue-500"></i> License &amp; Trial</a></li>
+                    <li><a href="#" data-section="troubleshooting" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-troubleshooting"><i class="fa-solid fa-wrench mr-3 text-blue-500"></i> Troubleshooting</a></li>
+                    <li><a href="#" data-section="tips" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-tips"><i class="fa-solid fa-lightbulb mr-3 text-blue-500"></i> Tips &amp; Tricks</a></li>
+                    <li><a href="#" data-section="faq" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-faq"><i class="fa-solid fa-circle-question mr-3 text-blue-500"></i> FAQ</a></li>
+                    <li><a href="#" data-section="changelog" class="nav-link block py-2 pl-4 pr-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors nav-link-changelog"><i class="fa-solid fa-list mr-3 text-blue-500"></i> Changelog</a></li>
+                </ul>
+            </nav>
+        </div>
+        <div class="mt-auto p-6 text-center text-xs text-gray-500 border-t border-gray-200">
+            Made with <i class="fa-solid fa-heart text-red-500"></i> by Woxus Team
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-hidden">
+        <div class="h-full overflow-y-auto p-6 lg:p-10 max-w-4xl mx-auto" id="content-container">
+
+            <!-- ===================== OVERVIEW ===================== -->
+            <section id="overview-section" class="space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Overview</h2>
+                <p class="text-gray-600 leading-relaxed mb-6">
+                    <strong>Woxus</strong> is a cross-platform desktop AI assistant that combines real-time voice
+                    conversation with local privacy and powerful desktop automation. It runs entirely on your machine,
+                    using a single WebSocket connection for speech-to-text, text-to-speech, interruption, and
+                    streaming reasoning — and keeps your memories, tasks, and settings stored locally.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-xl p-6 shadow hover:shadow-lg transition-shadow">
+                        <div class="flex items-start space-x-4">
+                            <div class="h-12 w-12 bg-gradient-to-r from-blue-500/10 to-indigo-600/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-microphone-lines text-2xl text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Real-Time Voice</h3>
+                                <p class="text-sm text-gray-600">Low-latency voice conversations with barge-in — speak while Woxus talks.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow hover:shadow-lg transition-shadow">
+                        <div class="flex items-start space-x-4">
+                            <div class="h-12 w-12 bg-gradient-to-r from-blue-500/10 to-indigo-600/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-brain text-2xl text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Persistent Memory</h3>
+                                <p class="text-sm text-gray-600">Woxus remembers facts about you and injects them into every conversation.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow hover:shadow-lg transition-shadow">
+                        <div class="flex items-start space-x-4">
+                            <div class="h-12 w-12 bg-gradient-to-r from-blue-500/10 to-indigo-600/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-pen-to-square text-2xl text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Prompt Writer</h3>
+                                <p class="text-sm text-gray-600">Dictate an intent and Woxus writes a polished prompt straight into your editor.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow hover:shadow-lg transition-shadow">
+                        <div class="flex items-start space-x-4">
+                            <div class="h-12 w-12 bg-gradient-to-r from-blue-500/10 to-indigo-600/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-terminal text-2xl text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Desktop Automation</h3>
+                                <p class="text-sm text-gray-600">Run terminal commands, create projects, and manage files — hands-free.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow hover:shadow-lg transition-shadow">
+                        <div class="flex items-start space-x-4">
+                            <div class="h-12 w-12 bg-gradient-to-r from-blue-500/10 to-indigo-600/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-shield-halved text-2xl text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Local &amp; Private</h3>
+                                <p class="text-sm text-gray-600">Memories, tasks, and settings live on your machine. No analytics, no telemetry.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow hover:shadow-lg transition-shadow">
+                        <div class="flex items-start space-x-4">
+                            <div class="h-12 w-12 bg-gradient-to-r from-blue-500/10 to-indigo-600/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i class="fa-solid fa-robot text-2xl text-blue-500"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Local Mini Agent</h3>
+                                <p class="text-sm text-gray-600">An on-device agent handles tasks in the background while you keep talking.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-blue-900 mb-3"><i class="fa-solid fa-circle-info mr-2"></i>How it works</h3>
+                    <p class="text-sm text-blue-900 mb-3 leading-relaxed">
+                        Woxus is an Electron app with a bundled backend. When you speak:
+                    </p>
+                    <ol class="list-decimal list-inside space-y-1 text-sm text-blue-900">
+                        <li>Your microphone audio is streamed over a secure WebSocket to the <strong>Live API</strong>.</li>
+                        <li>The <strong>Live API</strong> handles speech recognition, reasoning, and voice synthesis in one connection.</li>
+                        <li>Woxus plays the reply through your speakers while keeping the mic open for interruption.</li>
+                        <li>If a computer task is needed, the <strong>Local Mini Agent</strong> runs it in the background so the conversation never stalls.</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- ===================== GETTING STARTED ===================== -->
+            <section id="getting-started-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Getting Started</h2>
+                <p class="text-gray-600 mb-6 leading-relaxed">
+                    Follow these steps to install and begin using Woxus.
+                </p>
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fa-solid fa-download mr-2 text-blue-500"></i>1. Install Woxus</h3>
+                        <p class="text-gray-600 mb-3">Download the installer for your platform from the Woxus website:</p>
+                        <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                            <li><strong>macOS</strong> — DMG file. Drag Woxus to Applications.</li>
+                            <li><strong>Windows</strong> — NSIS installer (Woxus.exe).</li>
+                            <li><strong>Linux</strong> — AppImage.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fa-solid fa-key mr-2 text-blue-500"></i>2. Activate a License (or start your free trial)</h3>
+                        <p class="text-gray-600 mb-3">On first launch you can either:</p>
+                        <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                            <li>Start a <strong>free 10-minute trial</strong> (one per device).</li>
+                            <li>Enter a <strong>license key</strong> you purchased from the Woxus website.</li>
+                        </ul>
+                        <p class="text-sm text-gray-500 mt-3">Licenses are bound to a single device. When the trial expires you'll be prompted to purchase or submit feedback.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fa-solid fa-shield-halved mr-2 text-blue-500"></i>3. Grant Permissions</h3>
+                        <p class="text-gray-600 mb-3">Woxus needs two permissions for the full experience:</p>
+                        <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                            <li><strong>Microphone</strong> — for voice input (prompted automatically).</li>
+                            <li><strong>Accessibility (macOS)</strong> — required for the <em>Prompt Writer</em> to paste into your apps. You'll see an amber "Automation Permission Required" gate that opens System Settings for you. Enable Woxus there and return.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fa-solid fa-microphone mr-2 text-blue-500"></i>4. Talk to Woxus</h3>
+                        <p class="text-gray-600 mb-3">Three ways to start a conversation:</p>
+                        <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                            <li>Click the <strong>voice orb</strong> on the Home screen.</li>
+                            <li>Use the floating <strong>desktop orb</strong> in the corner of your screen.</li>
+                            <li>Press your <strong>global hotkey</strong> (default <span class="kbd">Cmd/Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">P</span>) to open the overlay.</li>
+                        </ul>
+                        <p class="text-sm text-gray-600 mt-3">Woxus greets you automatically, and if it has memory of you (for example, that you prefer Gujarati), it speaks to you in your language right away.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4"><i class="fa-solid fa-lightbulb mr-2 text-blue-500"></i>First things to try</h3>
+                        <div class="space-y-2 text-sm text-gray-700">
+                            <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"Hello Woxus!"</p>
+                            <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"Remember that I speak Gujarati."</p>
+                            <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"List the folders on my desktop."</p>
+                            <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"Write a prompt for an agent to read a PRD and make a plan."</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== VOICE & CONVERSATION ===================== -->
+            <section id="voice-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Voice &amp; Conversation</h2>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">How voice works</h3>
+                    <p class="text-gray-600 mb-4 leading-relaxed">Woxus uses a single WebSocket connection to the <strong>Live API</strong>. There are no separate speech-to-text or text-to-speech vendors — everything is handled in one connection, which keeps latency low.</p>
+                    <div class="prose text-sm">
+                        <pre><code>Microphone ──16kHz PCM──▶ Live API WebSocket ──24kHz PCM──▶ Speakers
+                                     │
+                               Transcription text
+                               (for memory + on-screen display)</code></pre>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Conversation features</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li><strong>Auto-greeting</strong> — Woxus greets you when you start a session; you don't have to speak first.</li>
+                        <li><strong>Barge-in / interruption</strong> — speak while Woxus is talking to stop it and take the floor.</li>
+                        <li><strong>Low latency</strong> — casual questions are answered directly, in under a second, without any tool detour.</li>
+                        <li><strong>Multilingual</strong> — Woxus understands and speaks many languages and matches your language automatically.</li>
+                        <li><strong>Memory-aware</strong> — durable facts you've saved (name, preferred language, preferences) are injected into the system prompt so Woxus knows them from the first turn.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">The voice orb &amp; overlay</h3>
+                    <div class="space-y-3 text-sm text-gray-600">
+                        <p><i class="fa-solid fa-circle mr-2 text-blue-500"></i><strong>Home orb</strong> — the large button on the Home screen. Click to start or stop the voice session.</p>
+                        <p><i class="fa-solid fa-circle mr-2 text-blue-500"></i><strong>Floating orb</strong> — a small always-on-top orb in the corner of your screen. Click it to open the main window, or use it to start talking from anywhere.</p>
+                        <p><i class="fa-solid fa-circle mr-2 text-blue-500"></i><strong>Overlay window</strong> — a minimal window opened by the global hotkey for quick interactions without leaving your current app.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Stopping a session</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">
+                        Click the orb again (or use the stop control) to end the session. This is an intentional stop —
+                        Woxus will <em>not</em> reconnect. Automatic reconnection only happens if the connection
+                        unexpectedly drops mid-conversation.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ===================== PROMPT WRITER ===================== -->
+            <section id="prompt-writer-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Prompt Writer</h2>
+                <p class="text-gray-600 mb-6 leading-relaxed">
+                    The Prompt Writer turns your spoken intent into a polished, detailed prompt and types it into the
+                    app where your cursor is — perfect for <em>Claude Code, opencode, Cursor, ChatGPT</em>, or any
+                    text input on your computer.
+                </p>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-circle-check mr-2 text-blue-500"></i>Prerequisite: Accessibility permission</h3>
+                    <p class="text-gray-600 text-sm mb-3 leading-relaxed">
+                        Pasting into other apps requires macOS <strong>Accessibility</strong> permission. The first time
+                        you launch Woxus, an amber gate appears — click <em>Open System Settings</em>, enable Woxus
+                        under <strong>Privacy &amp; Security → Accessibility</strong>, then return. The gate clears automatically.
+                    </p>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-blue-500"></i>How to use it</h3>
+                    <ol class="list-decimal list-inside space-y-3 text-sm text-gray-700">
+                        <li>Put your cursor in the input box of the app you want the prompt in.</li>
+                        <li>Start a voice session with Woxus and say something like:<br>
+                            <span class="text-gray-500 italic">"Write a prompt for an agent to read a PRD and create a detailed plan."</span></li>
+                        <li>Woxus acknowledges (<em>"On it…"</em>) and keeps listening while it composes the prompt in the background.</li>
+                        <li>When ready, the prompt is <strong>pasted at your cursor</strong> and you'll see a "✓ Prompt pasted" toast.</li>
+                    </ol>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-microchip mr-2 text-blue-500"></i>How it works under the hood</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>The <strong>main agent</strong> (Live API) generates the final prompt text.</li>
+                        <li>The <strong>Local Mini Agent</strong> (on-device) executes a <code>write_to_focused_input</code> action.</li>
+                        <li>Woxus copies the prompt to the clipboard and injects <strong>Cmd/Ctrl+V</strong> at the cursor via nut.js.</li>
+                        <li>If the keystroke can't be injected (permission missing), the prompt stays on your clipboard and Woxus tells you to press <span class="kbd">Cmd/Ctrl</span> + <span class="kbd">V</span> manually.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ===================== MINI AGENT & TASKS ===================== -->
+            <section id="mini-agent-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Mini Agent &amp; Computer Tasks</h2>
+                <p class="text-gray-600 mb-6 leading-relaxed">
+                    Woxus can operate your computer — run terminal commands, create projects, install packages, and
+                    manage files. Heavy tasks run in the <strong>background</strong> so you can keep talking to Woxus
+                    while it works.
+                </p>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-laptop mr-2 text-blue-500"></i>What the Mini Agent can do</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>Run shell commands (list files, install packages, run builds, git operations).</li>
+                        <li>Create projects and folders on your Desktop or anywhere.</li>
+                        <li>Read and write files with validated extensions.</li>
+                        <li>Write or paste a prompt into the focused app (see <a href="#" data-section="prompt-writer" class="text-blue-600 hover:underline">Prompt Writer</a>).</li>
+                        <li>Auto-heal failed commands up to 10 attempts with local, rule-based fixes.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-gauge-high mr-2 text-blue-500"></i>Background execution</h3>
+                    <p class="text-gray-600 text-sm mb-3 leading-relaxed">
+                        When you ask Woxus to do a task:
+                    </p>
+                    <ol class="list-decimal list-inside space-y-2 text-sm text-gray-700">
+                        <li>Woxus says a short acknowledgment (<em>"On it — I'll let you know when it's done."</em>).</li>
+                        <li>The task runs <strong>in the background</strong> — you can keep talking to Woxus, ask other questions, or give new instructions.</li>
+                        <li>When the task finishes, Woxus reports the result.</li>
+                    </ol>
+                    <p class="text-sm text-gray-500 mt-3">This is why Woxus never goes silent for 20 seconds while a command runs.</p>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-list-check mr-2 text-blue-500"></i>The Tasks page</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">
+                        Every background command appears live on the <strong>Tasks</strong> page with its status
+                        (running / done / failed), exit code, and output — so you can watch progress in real time.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ===================== MEMORY ===================== -->
+            <section id="memory-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Memory System</h2>
+                <p class="text-gray-600 mb-6 leading-relaxed">
+                    Woxus remembers durable facts about you — your name, preferred language, preferences, projects,
+                    and goals — and uses them in every conversation.
+                </p>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-floppy-disk mr-2 text-blue-500"></i>Saving memories</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>Say <em>"Remember that…"</em> — Woxus saves the fact via a memory tool.</li>
+                        <li>Example: <em>"Remember that I speak Gujarati."</em> → saved to memory.</li>
+                        <li>You can also add/edit memories manually on the <strong>Memory</strong> page.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-bolt mr-2 text-blue-500"></i>Using memories</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>At the start of every session, all active memories are injected into the system prompt.</li>
+                        <li>Woxus knows facts <strong>before you say anything</strong> — for example, it greets you in Gujarati if that's your saved preference.</li>
+                        <li>Memory works in text and voice, across sessions and app updates.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-shield-halved mr-2 text-blue-500"></i>Privacy</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">
+                        Memories are stored in a local file on your machine. Nothing is uploaded to any server — the
+                        only network traffic is your live audio for the current conversation.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ===================== PAGES & NAVIGATION ===================== -->
+            <section id="pages-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Pages &amp; Navigation</h2>
+                <p class="text-gray-600 mb-6 leading-relaxed">
+                    Woxus has a compact set of focused pages, reachable from the left sidebar or the command palette
+                    (<span class="kbd">Cmd/Ctrl</span> + <span class="kbd">K</span>).
+                </p>
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Home (/)</h3>
+                        <p class="text-gray-600 text-sm mb-2">The main voice interface. Click the orb to start a session, then just talk.</p>
+                        <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                            <li>Large voice orb (start / stop)</li>
+                            <li>Live transcription of what you and Woxus say</li>
+                            <li>Local model download banner (Mini Agent)</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Tasks (/tasks)</h3>
+                        <p class="text-gray-600 text-sm mb-2">Watch every background command the Mini Agent runs — live status, exit code, and output.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Memory (/memory)</h3>
+                        <p class="text-gray-600 text-sm mb-2">Browse, search, edit, and delete the facts Woxus remembers about you.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">License (/license)</h3>
+                        <p class="text-gray-600 text-sm mb-2">See your license status, activate a key, or start the free trial.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Settings (/settings)</h3>
+                        <p class="text-gray-600 text-sm mb-2">Theme, auto-start, global hotkey, API key &amp; model, and auto-updates.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Orb &amp; Overlay</h3>
+                        <p class="text-gray-600 text-sm mb-2">The floating orb (always-on-top) and the global-hotkey overlay give you voice access from anywhere.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== SETTINGS ===================== -->
+            <section id="settings-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Settings</h2>
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <div class="prose text-sm">
+                        <table>
+                            <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+                            <tbody>
+                                <tr><td><strong>Theme</strong></td><td>Light or dark appearance.</td></tr>
+                                <tr><td><strong>Auto-start on login</strong></td><td>Launch Woxus when you sign in to your computer.</td></tr>
+                                <tr><td><strong>Global hotkey</strong></td><td>Shortcut to toggle the overlay (default <span class="kbd">Cmd/Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">P</span>).</td></tr>
+                                <tr><td><strong>API key</strong></td><td>Set your own API key for the Live API.</td></tr>
+                                <tr><td><strong>Model</strong></td><td>Choose the model used for voice.</td></tr>
+                                <tr><td><strong>Auto-update</strong></td><td>Check for and install new versions; see the current version and update progress.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-amber-900 mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Note</h3>
+                    <p class="text-sm text-amber-900 leading-relaxed">
+                        In the packaged app, the API key you set here is passed to the bundled backend automatically.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ===================== KEYBOARD SHORTCUTS ===================== -->
+            <section id="shortcuts-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Keyboard Shortcuts</h2>
+                <p class="text-gray-600 mb-6">The global hotkey works even when Woxus isn't focused.</p>
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <div class="prose text-sm">
+                        <table>
+                            <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
+                            <tbody>
+                                <tr><td><span class="kbd">Cmd/Ctrl</span> + <span class="kbd">K</span></td><td>Open the command palette</td></tr>
+                                <tr><td><span class="kbd">Cmd/Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">P</span></td><td>Toggle the overlay window (global)</td></tr>
+                                <tr><td><span class="kbd">Escape</span></td><td>Close overlay / command palette / modal</td></tr>
+                                <tr><td><span class="kbd">Enter</span></td><td>Send a chat message</td></tr>
+                                <tr><td><span class="kbd">Shift</span> + <span class="kbd">Enter</span></td><td>New line in message input</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== LICENSE & TRIAL ===================== -->
+            <section id="license-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">License &amp; Free Trial</h2>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-hourglass-half mr-2 text-blue-500"></i>Free trial</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>First-time users get <strong>10 minutes</strong> of full access.</li>
+                        <li>One trial per device — a device identifier prevents reuse.</li>
+                        <li>When the timer ends, you'll see a purchase / feedback screen.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-key mr-2 text-blue-500"></i>License keys</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>Keys are verified against Woxus's license server on startup and periodically.</li>
+                        <li>Each key is <strong>device-bound</strong> — one key per machine.</li>
+                        <li>If a key is revoked, Woxus locks to enforce the license.</li>
+                        <li>Offline cache keeps the app usable during brief connection loss; revocation is still enforced.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-cart-shopping mr-2 text-blue-500"></i>Purchasing</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">
+                        Visit the Woxus website (the admin/licensing portal) to purchase a key. Enter it on the
+                        License page and Woxus verifies and activates it instantly.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ===================== TROUBLESHOOTING ===================== -->
+            <section id="troubleshooting-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Troubleshooting</h2>
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Woxus doesn't hear me / no response</h3>
+                        <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                            <li>Make sure the <strong>microphone</strong> permission is granted to Woxus.</li>
+                            <li>Confirm the orb is showing the "Listening…" state and you're speaking after the greeting.</li>
+                            <li>Check that your system mic isn't muted and Woxus isn't using the wrong input device.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">The prompt is copied but not pasted</h3>
+                        <p class="text-gray-600 text-sm mb-2">This means the macOS <strong>Accessibility</strong> permission isn't granted (or Woxus was updated since granting).</p>
+                        <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                            <li>Reopen System Settings → Privacy &amp; Security → Accessibility and ensure Woxus is toggled on.</li>
+                            <li>If it's on, toggle it off and on again, then restart Woxus.</li>
+                            <li>You can always paste manually with <span class="kbd">Cmd/Ctrl</span> + <span class="kbd">V</span> since the prompt is on your clipboard.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Woxus keeps reconnecting</h3>
+                        <p class="text-gray-600 text-sm leading-relaxed">Reconnecting on its own happens only when the session drops unexpectedly (network blip, API error). If you see it reconnect right after you stop, make sure you're clicking the orb to stop rather than force-quitting. Deliberate stops never reconnect.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">"API key not configured"</h3>
+                        <p class="text-gray-600 text-sm leading-relaxed">Open Settings and add a valid API key (or select a model), then restart the voice session. The packed app passes your key to the backend automatically.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Voice is laggy / 20-second delays</h3>
+                        <p class="text-gray-600 text-sm leading-relaxed">Casual questions should get instant replies. Long delays usually mean a heavy computer task is running — that's expected and runs in the background; you can keep talking. If <em>everything</em> is slow, check your internet connection and API quota.</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Where is my data stored?</h3>
+                        <p class="text-gray-600 text-sm leading-relaxed">Everything lives in a local data folder on your machine — memories, trial/license state, settings, and logs. Back it up to move to a new machine.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== TIPS & TRICKS ===================== -->
+            <section id="tips-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Tips &amp; Tricks</h2>
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-zap mr-2 text-blue-500"></i>Productivity boosts</h3>
+                    <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                        <li>Use <span class="kbd">Cmd/Ctrl</span>+<span class="kbd">K</span> to jump anywhere without the mouse.</li>
+                        <li>The <strong>global hotkey</strong> works in any app — open the overlay without switching windows.</li>
+                        <li>Say <em>"Remember that…"</em> to store facts; Woxus applies them in every future session.</li>
+                        <li>Combine steps: <em>"Create a folder called notes and list what's in my Desktop."</em> Woxus chains background tasks.</li>
+                    </ul>
+                </div>
+                <div class="bg-white rounded-xl p-6 shadow">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-blue-500"></i>Prompt-writing recipes</h3>
+                    <div class="space-y-2 text-sm text-gray-700">
+                        <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"Write a prompt to generate a unit test suite for this API."</p>
+                        <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"Write a prompt for refactoring this React component with best practices."</p>
+                        <p><i class="fa-solid fa-play text-blue-500 mr-2"></i>"Write a prompt that turns a product idea into a one-page PRD."</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== FAQ ===================== -->
+            <section id="faq-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">General</h3>
+                        <div class="space-y-4">
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">Is Woxus free?</p>
+                                <p class="text-gray-600 md:w-2/3">There's a free 10-minute trial per device. Full use requires a purchased license key.</p>
+                            </div>
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">Does Woxus work offline?</p>
+                                <p class="text-gray-600 md:w-2/3">The interface, memory, and task tracking work offline. Live voice requires an internet connection.</p>
+                            </div>
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">Is my data private?</p>
+                                <p class="text-gray-600 md:w-2/3">Yes. Memories, tasks, and settings stay on your machine. Only the live audio of the current conversation is transmitted for processing; no analytics or telemetry are collected.</p>
+                            </div>
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">Can I use it on multiple computers?</p>
+                                <p class="text-gray-600 md:w-2/3">Yes, but each install needs its own license key, and memories/settings aren't automatically synced between devices.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Technical</h3>
+                        <div class="space-y-4">
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">Which AI model does Woxus use?</p>
+                                <p class="text-gray-600 md:w-2/3">Woxus uses a state-of-the-art <strong>Live API</strong> for live voice, plus an on-device model for the Local Mini Agent.</p>
+                            </div>
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">How much disk space does it need?</p>
+                                <p class="text-gray-600 md:w-2/3">Roughly 200MB for the app, plus ~2GB if you download the Local Mini Agent model for offline task automation.</p>
+                            </div>
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">Does Woxus collect telemetry?</p>
+                                <p class="text-gray-600 md:w-2/3">No. No usage analytics or personal data are transmitted beyond the live conversation audio you initiate.</p>
+                            </div>
+                            <div class="flex flex-col md:flex-row md:space-x-4">
+                                <p class="font-medium text-gray-900 md:w-1/3 mb-1">System requirements?</p>
+                                <p class="text-gray-600 md:w-2/3">macOS 12+, Windows 10+, or a modern Linux distro. At least 4GB RAM and a dual-core CPU.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===================== CHANGELOG ===================== -->
+            <section id="changelog-section" class="hidden space-y-8">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6">Changelog</h2>
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 flex items-center mb-4">
+                            <span>Version 1.0.0</span>
+                            <span class="ml-auto px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">Current</span>
+                        </h3>
+                        <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                            <li><strong>Non-blocking tools</strong> — computer tasks run in the background with a "on it" ack; the conversation never stalls.</li>
+                            <li><strong>Intentional-stop fix</strong> — clicking the orb to stop no longer triggers an unwanted reconnect.</li>
+                            <li><strong>Memory injection</strong> — saved facts are injected into the system prompt so Woxus knows them from the first turn.</li>
+                            <li><strong>Prompt Writer</strong> — speak an intent and Woxus pastes a polished prompt into your focused app (macOS Accessibility required).</li>
+                            <li><strong>Accessibility permission gate</strong> — clear, automatic setup for automation permissions.</li>
+                            <li><strong>Native SDK voice path</strong> — switched to the Live SDK for lower latency and reliability.</li>
+                            <li><strong>Mic silence-gate removed</strong> — continuous audio streaming so voice activity detection ends turns promptly.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl p-6 shadow">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Version 0.1.0</h3>
+                        <ul class="list-disc list-inside space-y-2 text-sm text-gray-600">
+                            <li><strong>Initial release</strong> — voice assistant with the Live API, memory system, task tracking, settings, license + trial, overlay window, and floating orb.</li>li>
+                            <li>Voice activity detection and natural turn-taking.</li>
+                            <li>Auto-update support.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const navLinks = document.querySelectorAll('.nav-link');
+            const sidebar = document.getElementById('sidebar');
+            const menuBtn = document.getElementById('mobile-menu-btn');
+
+            function showSection(sectionName) {
+                const target = document.getElementById(sectionName + '-section');
+                if (!target) return;
+                // Hide all sections
+                document.querySelectorAll('section[id$="-section"]').forEach(function (s) {
+                    s.classList.add('hidden');
+                });
+                target.classList.remove('hidden');
+                // Update active nav link
+                navLinks.forEach(function (l) {
+                    l.classList.remove('active-nav');
+                });
+                var active = document.querySelector('.nav-link-' + sectionName);
+                if (active) active.classList.add('active-nav');
+                // Scroll content to top
+                document.getElementById('content-container').scrollTop = 0;
+                // Close mobile menu
+                if (sidebar && window.innerWidth < 1024) sidebar.classList.add('hidden');
+            }
+
+            // Mobile menu toggle
+            if (menuBtn) {
+                menuBtn.addEventListener('click', function () {
+                    sidebar.classList.toggle('hidden');
+                });
+            }
+
+            // Nav link clicks (including links inside content that carry data-section)
+            document.addEventListener('click', function (e) {
+                var el = e.target.closest('[data-section]');
+                if (el) {
+                    e.preventDefault();
+                    showSection(el.getAttribute('data-section'));
+                }
+            });
+
+            // Show overview by default
+            showSection('overview');
+        });
+    </script>
+</body>
+</html>

@@ -1,10 +1,13 @@
 import { app } from 'electron';
-// electron-updater is CJS; Node's ESM lexer cannot statically detect its named
-// exports, so use a default import and destructure instead.
-import electronUpdater from 'electron-updater';
+import { createRequire } from 'module';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
 
-const { autoUpdater } = electronUpdater;
+// electron-updater is CommonJS. Loading it via createRequire guarantees we get
+// the module.exports object directly — immune to ESM named-export detection
+// (`import { autoUpdater } from 'electron-updater'` throws at runtime in the
+// packaged app because Node's ESM loader can't statically see CJS named exports).
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require('electron-updater');
 
 // In-place updates (Squirrel.Mac) work for unsigned apps that were already
 // launched once (which clears Gatekeeper quarantine). Fresh downloads still
@@ -77,7 +80,7 @@ export function initAutoUpdater(sink: StatusSink): void {
 
   // Silent check shortly after startup (no user prompt if none available).
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((err) => {
+    autoUpdater.checkForUpdates().catch((err: unknown) => {
       console.error('[updater] check failed:', err);
       sink({ status: 'error', error: String(err) });
     });
@@ -85,13 +88,13 @@ export function initAutoUpdater(sink: StatusSink): void {
 }
 
 export async function checkForUpdates(): Promise<void> {
-  await autoUpdater.checkForUpdates().catch((err) => {
+  await autoUpdater.checkForUpdates().catch((err: unknown) => {
     console.error('[updater] check failed:', err);
   });
 }
 
 export async function downloadUpdate(): Promise<void> {
-  await autoUpdater.downloadUpdate().catch((err) => {
+  await autoUpdater.downloadUpdate().catch((err: unknown) => {
     console.error('[updater] download failed:', err);
   });
 }

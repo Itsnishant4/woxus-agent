@@ -32,13 +32,10 @@
 *~
 .DS_Store
 .Python
-.env
 .env.*.json
 .env.*.local
-.env.local
 .idea/
 .venv/
-.vscode/
 Thumbs.db
 __pycache__/
 backend/data/
@@ -53,3 +50,4 @@ release/
 venv/
 yarn-debug.log*
 yarn-error.log*
+config.bat

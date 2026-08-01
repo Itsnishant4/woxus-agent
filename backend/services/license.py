@@ -77,7 +77,7 @@ def _save_licenses(licenses: list[dict]):
 
 def _verify_remote(license_key: str, hardware_id: str) -> dict | None:
     """Verify against deployed admin panel. Returns None when unreachable."""
-    server = os.getenv("LICENSE_SERVER_URL", "https://woxus-admin.vercel.app")
+    server = os.getenv("LICENSE_SERVER_URL", "https://woxus-a.vercel.app")
     if not server:
         return None
     try:

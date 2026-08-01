@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 
 // Admin backend base URL (pricing + Razorpay). Set via VITE_ADMIN_API_URL at build.
-// e.g. https://woxus-admin.vercel.app
+// e.g. https://woxus-a.vercel.app
 const ADMIN_API = (import.meta.env.VITE_ADMIN_API_URL as string | undefined) || '';
 
 interface PricingPlan {

@@ -22,8 +22,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startTrial: (email: string) => ipcRenderer.invoke('trial:start', email),
   submitFeedback: (rating: number, text: string) => ipcRenderer.invoke('feedback:submit', rating, text),
 
-  // Auto-update
+  // Auto-update (manual flow: user clicks Download, then Restart & Install)
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateStatus: (callback: (state: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);

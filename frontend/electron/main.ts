@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
 import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
-import { initAutoUpdater, checkForUpdates, installUpdate, UpdateStatus } from './updaterService.js';
+import { initAutoUpdater, checkForUpdates, downloadUpdate, installUpdate, UpdateStatus } from './updaterService.js';
 import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
 import { checkPermission, openPermissionSettings } from './permissionService.js';
 
@@ -333,6 +333,11 @@ ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('update:check', () => {
   checkForUpdates();
+  return true;
+});
+
+ipcMain.handle('update:download', () => {
+  downloadUpdate();
   return true;
 });
 

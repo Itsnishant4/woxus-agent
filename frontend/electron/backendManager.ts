@@ -69,6 +69,7 @@ export class BackendManager {
           ...process.env,
           PYTHONUNBUFFERED: '1',
           // Packaged apps have no .env — inject keys persisted in settings
+          GEMINI_API_KEYS: settingsStore.getApiKey() || process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '',
           GEMINI_API_KEY: settingsStore.getApiKey() || process.env.GEMINI_API_KEY || '',
           GEMINI_MODEL: settingsStore.getGeminiModel() || process.env.GEMINI_MODEL || '',
           LICENSE_SERVER_URL: process.env.LICENSE_SERVER_URL || 'https://woxus-admin.vercel.app',

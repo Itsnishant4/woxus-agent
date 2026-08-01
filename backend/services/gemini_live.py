@@ -22,8 +22,8 @@ from typing import Any, Callable, Optional
 from google import genai
 from google.genai import types
 
-from .tool_executor import handle_tool_call
 from .stt import transcribe_pcm16
+from .tool_executor import handle_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -68,16 +68,22 @@ class GeminiLiveService:
 
     def __init__(
         self,
-        api_key: str,
+        api_keys: str | list[str],
         models: list[str] | str,
         input_sample_rate: int = 16000,
         tools: Optional[list[Any]] = None,
         system_instruction: Optional[str] = None,
     ):
-        self.api_key = api_key
+        if isinstance(api_keys, str):
+            api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+        if not api_keys:
+            api_keys = [""]
+        self.api_keys = api_keys
+        self._key_index = 0
+        self.api_key = api_keys[0]
         self.models = [models] if isinstance(models, str) else models
         self.input_sample_rate = input_sample_rate
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(api_key=self.api_key)
         self.tools = tools or []
         self.system_instruction = system_instruction
         self._running = False
@@ -91,6 +97,16 @@ class GeminiLiveService:
         self._stop_requested = False
         self.conversation_log: list[dict] = []
         self._last_log_ts = 0.0
+
+    def _rotate_key(self) -> bool:
+        """Switch to the next API key. Returns False when no keys remain."""
+        if self._key_index + 1 >= len(self.api_keys):
+            return False
+        self._key_index += 1
+        self.api_key = self.api_keys[self._key_index]
+        self.client = genai.Client(api_key=self.api_key)
+        logger.warning("Switching Gemini API key to #%d of %d", self._key_index + 1, len(self.api_keys))
+        return True
 
     def _build_config(self) -> types.LiveConnectConfig:
         """Build the Live session config. History is replayed as turns, never
@@ -170,6 +186,9 @@ class GeminiLiveService:
         """
         max_retries = 2
         attempt = 0
+        self._key_index = 0
+        self.api_key = self.api_keys[0]
+        self.client = genai.Client(api_key=self.api_key)
         while True:
             config = self._build_config()
             replay_history = attempt > 0
@@ -208,37 +227,49 @@ class GeminiLiveService:
         last_error = None
         cm = None
         session = None
-        for i, model_name in enumerate(self.models):
-            logger.info(
-                "Connecting to Gemini Live (attempt %d/%d, model=%s)",
-                i + 1, len(self.models), model_name,
-            )
-            try:
-                cm = self.client.aio.live.connect(
-                    model=model_name, config=config
+        rotated = False
+        while True:
+            for i, model_name in enumerate(self.models):
+                logger.info(
+                    "Connecting to Gemini Live (attempt %d/%d, model=%s)",
+                    i + 1, len(self.models), model_name,
                 )
-                session = await cm.__aenter__()
-                self.active_model = model_name
-                last_error = None
-                logger.info("Gemini Live session opened with model=%s", model_name)
-                break
-            except Exception as e:
-                err_str = str(e).lower()
-                last_error = e
-                is_quota = any(
-                    kw in err_str
-                    for kw in ["quota", "rate", "429", "1011", "resource exhausted",
-                               "billing", "payment required"]
-                )
-                if is_quota and i + 1 < len(self.models):
-                    logger.warning(
-                        "Model %s quota exhausted, falling back to next...", model_name
+                try:
+                    cm = self.client.aio.live.connect(
+                        model=model_name, config=config
                     )
-                    continue
-                logger.error(
-                    "Model %s failed (not a quota issue): %s", model_name, e
-                )
-                raise
+                    session = await cm.__aenter__()
+                    self.active_model = model_name
+                    last_error = None
+                    logger.info("Gemini Live session opened with model=%s", model_name)
+                    break
+                except Exception as e:
+                    err_str = str(e).lower()
+                    last_error = e
+                    is_quota = any(
+                        kw in err_str
+                        for kw in ["quota", "rate", "429", "1011", "resource exhausted",
+                                   "billing", "payment required"]
+                    )
+                    if is_quota and i + 1 < len(self.models):
+                        logger.warning(
+                            "Model %s quota exhausted, falling back to next...", model_name
+                        )
+                        continue
+                    # Not a quota issue — likely a bad/quota'd key. Rotate and retry.
+                    if self._rotate_key():
+                        rotated = True
+                        logger.warning(
+                            "Model %s failed (%s), retrying with next API key", model_name, e
+                        )
+                        break
+                    logger.error(
+                        "Model %s failed (all API keys exhausted): %s", model_name, e
+                    )
+                    raise
+            if session or not rotated:
+                break
+            rotated = False
 
         if not session:
             raise RuntimeError(f"All Gemini Live models exhausted: {last_error}")

@@ -19,21 +19,30 @@ _WOXUS_HOME = woxus_data_dir().parent
 DEFAULT_GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
 
 
-def get_api_key() -> str:
-    """Resolve the shared Gemini key: env override → persisted settings → placeholder."""
-    env_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if env_key:
-        return env_key
+def get_api_keys() -> list[str]:
+    """Resolve Gemini API keys: env GEMINI_API_KEYS (comma-separated) → env
+    GEMINI_API_KEY → persisted settings → placeholder."""
+    raw = (
+        os.getenv("GEMINI_API_KEYS", "").strip()
+        or os.getenv("GEMINI_API_KEY", "").strip()
+    )
+    if raw:
+        return [k.strip() for k in raw.split(",") if k.strip()]
     settings_file = woxus_data_dir() / "settings.json"
     if settings_file.exists():
         try:
             keys = json.loads(settings_file.read_text()).get("keys", {})
             gemini = (keys.get("gemini") or "").strip()
             if gemini:
-                return gemini
+                return [k.strip() for k in gemini.split(",") if k.strip()]
         except (json.JSONDecodeError, OSError):
             pass
-    return DEFAULT_GEMINI_API_KEY
+    return [DEFAULT_GEMINI_API_KEY]
+
+
+def get_api_key() -> str:
+    """First configured Gemini key (single-key compatibility)."""
+    return get_api_keys()[0]
 
 
 @lru_cache

@@ -15,7 +15,8 @@
     "lint": "eslint src --ext ts,tsx",
     "electron:dev": "node scripts/dev.mjs",
     "electron:build": "vite build && node scripts/build-electron.mjs",
-    "electron:package": "vite build && node scripts/build-electron.mjs && electron-builder"
+    "electron:package": "vite build && node scripts/build-electron.mjs && electron-builder",
+    "check:electron": "tsc -p tsconfig.electron.json --noEmit && node scripts/check-electron-imports.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.2",

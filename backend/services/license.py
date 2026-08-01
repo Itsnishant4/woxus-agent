@@ -3,13 +3,39 @@ import logging
 import os
 import urllib.request
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pymongo
 
 from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_expiry(value) -> datetime | None:
+    """Normalize expiry (datetime, ISO string, possibly with 'Z') to aware UTC."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(s)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+    return None
 
 DATA_DIR = woxus_data_dir()
 LICENSE_FILE = DATA_DIR / "licenses.json"
@@ -89,7 +115,7 @@ def _cache_remote_license(result: dict, license_key: str, hardware_id: str):
         "hardware_ids": [hardware_id],
         "max_activations": 99,
         "revoked": False,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": _utcnow().isoformat(),
         "cached_from_server": True,
     })
     _save_licenses(licenses)
@@ -99,12 +125,12 @@ def generate_key(expiry_days: int = 365, features: list[str] | None = None) -> d
     key = f"WOX-{uuid.uuid4().hex[:12].upper()}"
     record = {
         "key": key,
-        "expiry": (datetime.utcnow() + timedelta(days=expiry_days)).isoformat(),
+        "expiry": (_utcnow() + timedelta(days=expiry_days)).isoformat(),
         "features": features or ["all"],
         "hardware_ids": [],
         "max_activations": 1,
         "revoked": False,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": _utcnow().isoformat(),
     }
     licenses = _load_licenses()
     licenses.append(record)
@@ -119,7 +145,8 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
             continue
         if lic.get("revoked"):
             return {"valid": False, "reason": "License revoked"}
-        if lic["expiry"] and datetime.fromisoformat(lic["expiry"]) < datetime.utcnow():
+        expiry = _parse_expiry(lic.get("expiry"))
+        if expiry is not None and expiry < _utcnow():
             return {"valid": False, "reason": "License expired"}
         hw_ids = lic.get("hardware_ids", [])
         max_act = lic.get("max_activations", 1)
@@ -154,7 +181,8 @@ def verify_key(license_key: str, hardware_id: str) -> dict:
             if doc:
                 if doc.get("revoked"):
                     return {"valid": False, "reason": "License revoked"}
-                if doc.get("expiry") and doc["expiry"] < datetime.utcnow():
+                doc_expiry = _parse_expiry(doc.get("expiry"))
+                if doc_expiry is not None and doc_expiry < _utcnow():
                     return {"valid": False, "reason": "License expired"}
                 hw_ids = doc.get("hardwareIds") or []
                 max_act = doc.get("maxActivations", 1)

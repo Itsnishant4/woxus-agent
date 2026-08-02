@@ -30,6 +30,22 @@ export default function LicensePage({ onActivated }: Props) {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // The buy page needs this device's hardware ID so the purchased license can
+  // be bound to THIS machine. getHardwareId() is async (IPC), so the URL is
+  // assembled once the ID resolves rather than at module load.
+  const [buyUrl, setBuyUrl] = useState(BUY_URL);
+  const [hwid, setHwid] = useState("");
+
+  useEffect(() => {
+    // @ts-ignore
+    window.electronAPI?.getHardwareId?.().then((id: string) => {
+      if (!id) return;
+      setHwid(id);
+      const sep = BUY_URL.includes("?") ? "&" : "?";
+      setBuyUrl(`${BUY_URL}${sep}hardware_id=${encodeURIComponent(id)}`);
+    });
+  }, []);
+
   const checkStatus = useCallback(async () => {
     // @ts-ignore
     const result = await window.electronAPI?.getLicenseStatus?.();
@@ -194,7 +210,7 @@ export default function LicensePage({ onActivated }: Props) {
             <p className="text-sm text-muted-foreground max-w-sm">Your 10-minute trial has finished. Purchase a license to continue using Woxus.</p>
           </div>
           <a
-            href={BUY_URL}
+            href={buyUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={primaryBtnCls}
@@ -244,7 +260,7 @@ export default function LicensePage({ onActivated }: Props) {
                 : "Your trial is ending soon! Purchase a license to keep using Woxus."}
             </p>
             <a
-              href={BUY_URL}
+              href={buyUrl}
               target="_blank"
               rel="noopener noreferrer"
               className={primaryBtnCls + " mt-1"}
@@ -364,6 +380,42 @@ export default function LicensePage({ onActivated }: Props) {
             >
               {startingTrial ? "Starting..." : "Start Free Trial"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Buy License Card */}
+      {state === "unlicensed" && (
+        <div className={cardCls}>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center text-foreground shrink-0">
+              <ExternalLink className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Buy a License</h2>
+              <p className="text-xs text-muted-foreground font-medium">Skip the trial — get full access now</p>
+            </div>
+          </div>
+          <div className="space-y-3 pt-1">
+            <a
+              href={buyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={primaryBtnCls + " w-full"}
+            >
+              <ExternalLink className="h-4 w-4" />
+              Buy License Key
+            </a>
+            <p className="text-[11px] text-muted-foreground/70 font-medium leading-relaxed">
+              Your checkout is pre-bound to this device.
+              {hwid ? (
+                <span className="font-mono text-muted-foreground/90 block mt-0.5 truncate" title={hwid}>
+                  Device ID: {hwid}
+                </span>
+              ) : (
+                <span className="block mt-0.5">Device ID will be attached automatically.</span>
+              )}
+            </p>
           </div>
         </div>
       )}

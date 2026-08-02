@@ -25,15 +25,11 @@ extraResources:
       - "**/*"
 mac:
   icon: ../icons/macos/icon.icns
-  # Ad-hoc code signing (free, no Apple Developer Program). "identity": "-"
-  # signs with an ad-hoc identity so the app is NOT unsigned. Without this,
-  # the app is completely unsigned and macOS shows "damaged and can't be
-  # opened". Ad-hoc signing makes it launch normally (users just right-click
-  # → Open once instead of getting a hard "damaged" block).
-  identity: "-"
-  # Ad-hoc identity + hardened runtime can block unsigned nested native
-  # binaries (nut-js .node). Disable hardened runtime for ad-hoc builds.
-  hardenedRuntime: false
+  # No code signing (no Apple Developer Program). The app is unsigned, so
+  # macOS shows "Apple cannot verify" once — users right-click → Open. We
+  # deliberately do NOT ad-hoc sign: signing the bundled PyInstaller
+  # Python.framework crashes electron-builder with "bundle format is
+  # ambiguous (could be app or framework)".
   target:
     - target: dmg
       arch:

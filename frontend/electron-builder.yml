@@ -9,6 +9,9 @@ publish:
   # local `electron:package` (--publish never) build without a token.
 directories:
   output: release
+# GitHub Actions artifacts strip the exec bit from the bundled backend, so
+# re-add it in the packed app (macOS spawn would otherwise fail with EACCES).
+afterPack: scripts/after-pack.mjs
 files:
   - dist
   - dist-electron

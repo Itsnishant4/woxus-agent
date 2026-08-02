@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 import { API_BASE } from '@/services/api';
 
 const MODEL_STATUS_URL = `${API_BASE}/model/status`;
@@ -53,6 +54,10 @@ export default function ModelDownloadScreen({ onComplete }: Props) {
   const mbTotal = (bytesTotal / (1024 * 1024)).toFixed(1);
   const progress = typeof status?.progress === 'number' ? status.progress : 0;
 
+  // Until real bytes start flowing (progress > 0), show a spinner + the
+  // backend's status text instead of an empty progress bar at 0%.
+  const preparing = status === null || progress <= 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950 text-white">
       <div className="w-full max-w-sm px-6 space-y-8 text-center">
@@ -62,20 +67,29 @@ export default function ModelDownloadScreen({ onComplete }: Props) {
           <p className="text-xs text-zinc-500">One-time download. Runs fully on your device.</p>
         </div>
 
-        <div className="space-y-2.5">
-          <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-zinc-100 rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
+        {preparing ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+            <p className="text-[12px] text-zinc-400">
+              {status?.status_text || 'Preparing download…'}
+            </p>
           </div>
-          <div className="flex justify-between text-[11px]  text-zinc-500">
-            <span>{mbDownloaded} / {mbTotal} MB</span>
-            <span>{progress.toFixed(0)}%</span>
+        ) : (
+          <div className="space-y-2.5">
+            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-zinc-100 rounded-full transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[11px] text-zinc-500">
+              <span>{mbDownloaded} / {mbTotal} MB</span>
+              <span>{progress.toFixed(0)}%</span>
+            </div>
+            <p className="text-[11px] text-zinc-600 truncate">{status?.status_text}</p>
           </div>
-        </div>
+        )}
 
-        <p className="text-[11px] text-zinc-600 truncate">{status?.status_text || 'Preparing download…'}</p>
       </div>
     </div>
   );

@@ -5,8 +5,8 @@ certifi>=2024.8.30
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 google-genai>=2.14.0
-pydantic==2.10.0
-pydantic-settings==2.6.0
+pydantic>=2.12.5
+pydantic-settings>=2.6.0
 sqlalchemy==2.0.36
 httpx>=0.28.1
 websockets==14.1

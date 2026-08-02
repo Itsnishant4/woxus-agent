@@ -25,6 +25,12 @@ export type UpdateStatus =
 
 type StatusSink = (state: UpdateStatus) => void;
 
+// A 404 on GitHub's release feed means no release has been published yet
+// (private repo). Treat it as "no update available" instead of an error.
+function isNoReleaseError(err: unknown): boolean {
+  return String((err as Error)?.message || err).includes('404');
+}
+
 let initialized = false;
 
 export function initAutoUpdater(sink: StatusSink): void {
@@ -71,6 +77,11 @@ export function initAutoUpdater(sink: StatusSink): void {
     sink({ status: 'downloaded', version: info.version }),
   );
   autoUpdater.on('error', (err: Error) => {
+    if (isNoReleaseError(err)) {
+      console.log('[updater] No published release (404) — updates disabled');
+      sink({ status: 'none' });
+      return;
+    }
     console.error('[updater] error:', err.message);
     sink({ status: 'error', error: err.message });
   });
@@ -81,6 +92,11 @@ export function initAutoUpdater(sink: StatusSink): void {
   // Silent check shortly after startup (no user prompt if none available).
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch((err: unknown) => {
+      if (isNoReleaseError(err)) {
+        console.log('[updater] No published release (404) — updates disabled');
+        sink({ status: 'none' });
+        return;
+      }
       console.error('[updater] check failed:', err);
       sink({ status: 'error', error: String(err) });
     });
@@ -89,7 +105,7 @@ export function initAutoUpdater(sink: StatusSink): void {
 
 export async function checkForUpdates(): Promise<void> {
   await autoUpdater.checkForUpdates().catch((err: unknown) => {
-    console.error('[updater] check failed:', err);
+    if (!isNoReleaseError(err)) console.error('[updater] check failed:', err);
   });
 }
 

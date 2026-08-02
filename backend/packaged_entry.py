@@ -1,4 +1,5 @@
 import os
+import sys
 
 # The PyInstaller bundle has no system CA store, so urllib/httpx/ssl can't
 # verify TLS certs (model downloads + license server fail with
@@ -10,6 +11,16 @@ try:
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 except ImportError:
     pass
+
+# Packaged (windowed) apps have no console, so sys.stdout/stderr are None and
+# uvicorn's default logging formatter crashes calling .isatty() on them
+# (AttributeError: 'NoneType' object has no attribute 'isatty'). Point them at
+# devnull so logging config succeeds; app logs still go to woxus.log via the
+# file handler in main.py's lifespan.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 import uvicorn
 from backend.main import app

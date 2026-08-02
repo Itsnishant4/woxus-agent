@@ -326,6 +326,35 @@ async def run_local_mini_agent(prompt: str) -> dict:
     first_word = prompt.strip().split()[0].lower() if prompt.strip() else ""
     direct_cmd = first_word in _SHELL_KEYWORDS or any(f" {kw} " in f" {prompt} " for kw in _SHELL_KEYWORDS)
 
+    # Direct "type/paste the prompt: 'X'" request — type it immediately instead
+    # of running the slow agentic loop (~seconds of local inference). The
+    # frontend receives action='paste' and types it via nut.js right away.
+    if not direct_cmd and re.search(r"^(?:please\s+)?(?:type|paste|write|enter)\b", prompt, re.IGNORECASE):
+        quoted = re.findall(r"[`'\"]\s*([^`'\"]+?)\s*[`'\"]", prompt)
+        text = quoted[-1].strip() if quoted else ""
+        if not text:
+            after_colon = re.search(r":\s*(.+?)\s*$", prompt)
+            text = after_colon.group(1).strip().strip("'\"`") if after_colon else ""
+        if text and len(text) < 2000:
+            logger.info("🤖 [LOCAL MINI AGENT] Direct type request: %r", text[:60])
+            res = await _execute_tool_raw("write_to_focused_input", {
+                "text": text,
+                "_from_mini_agent": True,
+            })
+            if res.get("ok"):
+                return {
+                    "status": "success",
+                    "device": hw_info["device"],
+                    "prompt": prompt,
+                    "attempts_count": 1,
+                    "tools_executed": [f"write_to_focused_input: {text[:40]}"],
+                    "execution_trace": [],
+                    "action": "paste",
+                    "text": text,
+                    "mini_agent_output": res.get("text") or "Typed into focused input.",
+                    "message": res.get("text") or "Typed into focused input.",
+                }
+
     if not direct_cmd:
         # Agentic loop: AI reasons → calls tools → sees results → answers
         from .nano_inference import AGENT_PROMPT, agent_step, is_model_ready

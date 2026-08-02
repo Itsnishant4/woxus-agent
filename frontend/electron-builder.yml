@@ -26,26 +26,22 @@ extraResources:
 mac:
   icon: ../icons/macos/icon.icns
   # No code signing (no Apple Developer Program). The app is unsigned, so
-  # macOS shows "Apple cannot verify" once — users right-click → Open. We
-  # deliberately do NOT ad-hoc sign: signing the bundled PyInstaller
-  # Python.framework crashes electron-builder with "bundle format is
-  # ambiguous (could be app or framework)".
+  # macOS shows "Apple cannot verify" once — users right-click → Open.
+  #
+  # No "universal" fat-binary target: merging arm64+x64 fails because the
+  # bundled PyInstaller backend ships arch-specific binaries (Python.framework)
+  # that electron-builder can't merge. Ship arm64 (Apple Silicon) and x64
+  # (Intel) as separate installers instead.
   target:
     - target: dmg
       arch:
         - arm64
         - x64
-        - universal
     - target: zip
       arch:
         - arm64
         - x64
-        - universal
   artifactName: ${productName}-${version}-${arch}.${ext}
-  # Universal (fat binary) needs to know which arch-specific .node files belong
-  # to the x64 slice vs arm64 slice. Without this, electron-builder errors:
-  # "same in both x64 and arm64 builds and not covered by the x64ArchFiles rule"
-  x64ArchFiles: "node_modules/**/*.node"
   extendInfo:
     NSMicrophoneUsageDescription: Woxus uses the microphone to animate the orb when you speak.
 win:

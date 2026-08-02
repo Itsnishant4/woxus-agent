@@ -4,6 +4,7 @@ Manages hardware detection (Apple Silicon Metal / NVIDIA CUDA / CPU), downloadin
 model weights, local installation, progress tracking, and local inference execution.
 """
 
+import asyncio
 import logging
 import os
 import platform
@@ -351,7 +352,7 @@ async def run_local_mini_agent(prompt: str) -> dict:
         last_result = ""
 
         for step in range(1, 6):
-            decision = agent_step(messages)
+            decision = await asyncio.to_thread(agent_step, messages)
             action = (decision or {}).get("action")
 
             if action == "answer":
@@ -619,7 +620,7 @@ async def run_overlay_agent(prompt: str, history: list | None = None) -> dict:
             messages = keep
             logger.info("🤖 [OVERLAY AGENT] Trimmed history to %d messages (was %d chars)", len(messages), history_size)
 
-        decision = agent_step(messages)
+        decision = await asyncio.to_thread(agent_step, messages)
         action = (decision or {}).get("action")
 
         if action == "answer":

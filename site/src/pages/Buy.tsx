@@ -23,7 +23,10 @@ declare global {
 export default function Buy() {
   const { plan } = useParams();
   const [searchParams] = useSearchParams();
-  const hardwareIdFromUrl = searchParams.get('hardwareId') || '';
+  // Accept both spellings: the desktop app links with ?hardware_id=..., other
+  // callers may use ?hardwareId=...
+  const hardwareIdFromUrl =
+    searchParams.get('hardwareId') || searchParams.get('hardware_id') || '';
 
   const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [selected, setSelected] = useState<string>(plan || 'yearly');

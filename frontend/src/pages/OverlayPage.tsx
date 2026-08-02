@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, Loader2 } from 'lucide-react';
-const API = 'http://127.0.0.1:8457/api';
+import { resolveBackendPort } from '../services/api';
+const API = `http://127.0.0.1:${resolveBackendPort()}/api`;
 
 // Stable per-overlay-session id so the backend keeps conversation context
 const CONVERSATION_ID =

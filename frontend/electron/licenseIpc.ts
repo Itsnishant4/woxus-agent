@@ -1,8 +1,17 @@
 import { randomUUID } from 'crypto';
 import { networkInterfaces, hostname, platform } from 'os';
 import { settingsStore, CachedLicense, CachedTrial } from './store.js';
+import { BackendManager } from './backendManager.js';
 
-const API_BASE = 'http://127.0.0.1:8457/api';
+/**
+ * License/trial/feedback calls hit the LOCAL backend, which now runs on a
+ * port chosen at startup (8457 when free, otherwise the next free port). Read
+ * it lazily at call time — a module-level const would resolve before
+ * BackendManager.start() picks the port.
+ */
+function apiBase(): string {
+  return `http://127.0.0.1:${BackendManager.getInstance().getPort()}/api`;
+}
 
 function getMacAddress(): string {
   const interfaces = networkInterfaces();
@@ -41,7 +50,7 @@ export async function verifyLicense(licenseKey: string): Promise<{
 }> {
   const hwid = getHardwareId();
   try {
-    const res = await fetch(`${API_BASE}/license/verify`, {
+    const res = await fetch(`${apiBase()}/license/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ license_key: licenseKey, hardware_id: hwid }),
@@ -76,7 +85,7 @@ export async function getLicenseStatus(): Promise<{
   const storedKey = settingsStore.getLicenseKey();
   if (storedKey) {
     try {
-      const res = await fetch(`${API_BASE}/license/verify`, {
+      const res = await fetch(`${apiBase()}/license/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ license_key: storedKey, hardware_id: hwid }),
@@ -118,7 +127,7 @@ export async function getLicenseStatus(): Promise<{
   }
 
   try {
-    const res = await fetch(`${API_BASE}/trial/status?hardware_id=${hwid}`);
+    const res = await fetch(`${apiBase()}/trial/status?hardware_id=${hwid}`);
     const data = await res.json();
     if (data.active) {
       settingsStore.setCachedTrialStatus({
@@ -147,7 +156,7 @@ export async function getTrialStatus(): Promise<{
 }> {
   const hwid = getHardwareId();
   try {
-    const res = await fetch(`${API_BASE}/trial/status?hardware_id=${hwid}`);
+    const res = await fetch(`${apiBase()}/trial/status?hardware_id=${hwid}`);
     const data = await res.json();
     return {
       active: data.active,
@@ -168,7 +177,7 @@ export async function startTrial(email: string): Promise<{
 }> {
   const hwid = getHardwareId();
   try {
-    const res = await fetch(`${API_BASE}/trial/start`, {
+    const res = await fetch(`${apiBase()}/trial/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ hardware_id: hwid, email }),
@@ -193,7 +202,7 @@ export async function startTrial(email: string): Promise<{
 export async function submitFeedback(rating: number, text: string): Promise<boolean> {
   const hwid = getHardwareId();
   try {
-    await fetch(`${API_BASE}/feedback/`, {
+    await fetch(`${apiBase()}/feedback/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rating, text, hardware_id: hwid }),

@@ -1,11 +1,15 @@
 import { spawn, ChildProcess } from 'child_process';
 import { join, dirname } from 'path';
+import { createServer } from 'net';
 import { fileURLToPath } from 'url';
 import { app } from 'electron';
 import { settingsStore } from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const PREFERRED_PORT = 8457;
+const MAX_PORT_TRIES = 20;
 
 interface BackendState {
   isRunning: boolean;
@@ -14,6 +18,31 @@ interface BackendState {
 }
 
 let backendProcess: ChildProcess | null = null;
+let selectedPort = PREFERRED_PORT;
+
+/** True if nothing is listening on 127.0.0.1:port. */
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = createServer();
+    srv.unref();
+    srv.once('error', () => resolve(false));
+    srv.once('listening', () => srv.close(() => resolve(true)));
+    srv.listen(port, '127.0.0.1');
+  });
+}
+
+/**
+ * Pick the port the backend will run on: prefer 8457, and if it's taken
+ * (e.g. a leftover Woxus process), step up until a free one is found. The
+ * chosen port is used everywhere via getPort() — the renderer reads it once
+ * at startup through `backend:get-port`.
+ */
+async function pickFreePort(): Promise<number> {
+  for (let p = PREFERRED_PORT; p < PREFERRED_PORT + MAX_PORT_TRIES; p++) {
+    if (await isPortFree(p)) return p;
+  }
+  return PREFERRED_PORT;
+}
 
 function getBackendLaunch(): { bin: string; args: string[]; cwd: string } {
   if (app.isPackaged) {
@@ -30,7 +59,7 @@ function getBackendLaunch(): { bin: string; args: string[]; cwd: string } {
     : join(base, '.venv', 'bin', 'python');
   return {
     bin: pythonPath,
-    args: ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8457'],
+    args: ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', String(PREFERRED_PORT)],
     cwd: join(__dirname, '..', '..'),
   };
 }
@@ -48,6 +77,11 @@ export class BackendManager {
     return BackendManager.instance;
   }
 
+  /** Port the backend is (or will be) listening on. Defaults to 8457. */
+  getPort(): number {
+    return selectedPort;
+  }
+
   async start(): Promise<void> {
     if (backendProcess || this.state.isRunning) {
       return;
@@ -58,6 +92,10 @@ export class BackendManager {
       return;
     }
 
+    // Choose a free port BEFORE spawning so the whole app can use the same one.
+    selectedPort = await pickFreePort();
+    console.log(`[BackendManager] Picked backend port: ${selectedPort}`);
+
     const { bin, args, cwd } = getBackendLaunch();
     console.log('[BackendManager] Starting backend...', { bin, cwd });
 
@@ -67,6 +105,7 @@ export class BackendManager {
         stdio: ['ignore', 'inherit', 'inherit'],
         env: {
           ...process.env,
+          BACKEND_PORT: String(selectedPort),
           PYTHONUNBUFFERED: '1',
           // Packaged apps have no .env — inject keys persisted in settings
           GEMINI_API_KEYS: settingsStore.getApiKey() || process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '',

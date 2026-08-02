@@ -1,4 +1,7 @@
 # Woxus backend requirements
+# certifi: CA bundle for the packaged app — SSL_CERT_FILE is pointed at
+# certifi.where() in packaged_entry.py so TLS works without the system store.
+certifi>=2024.8.30
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 google-genai

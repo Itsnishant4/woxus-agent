@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Synchronous: the renderer needs the backend port at module load to build
+  // its API/WebSocket base URL. Blocking here is fine — it's a one-time read.
+  getBackendPort: () => ipcRenderer.sendSync('backend:get-port'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setAutoLaunch: (enable: boolean) => ipcRenderer.invoke('set-auto-launch', enable),

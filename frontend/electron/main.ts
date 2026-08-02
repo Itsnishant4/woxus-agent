@@ -329,6 +329,13 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 
+// Synchronous so the renderer can resolve its API base URL at module load
+// (the backend port is chosen in BackendManager.start() before any window is
+// created). Used by src/services/api.ts, gemini-client.ts and OverlayPage.
+ipcMain.on('backend:get-port', (event) => {
+  event.returnValue = BackendManager.getInstance().getPort();
+});
+
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('update:check', () => {

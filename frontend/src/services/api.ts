@@ -1,4 +1,19 @@
-export const API_BASE = 'http://127.0.0.1:8457/api';
+/**
+ * Resolve the backend port chosen by BackendManager (8457 when free, otherwise
+ * the next free port). The renderer reads it synchronously via preload so the
+ * API/WebSocket base URLs are correct from module load.
+ */
+export function resolveBackendPort(): number {
+  try {
+    const port = (window as any).electronAPI?.getBackendPort?.();
+    if (typeof port === "number" && port > 0) return port;
+  } catch {
+    /* dev / preload unavailable */
+  }
+  return 8457;
+}
+
+export const API_BASE = `http://127.0.0.1:${resolveBackendPort()}/api`;
 const BASE = API_BASE;
 
 async function request(path: string, opts?: RequestInit) {

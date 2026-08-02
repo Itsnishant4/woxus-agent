@@ -5,6 +5,8 @@
  * Connects to our backend WebSocket which relays to Gemini Live.
  */
 
+import { resolveBackendPort } from '../services/api';
+
 export interface GeminiClientConfig {
   onOpen?: () => void;
   onMessage?: (event: MessageEvent) => void;
@@ -21,7 +23,8 @@ export class GeminiClient {
   }
 
   connect() {
-    const wsUrl = `ws://127.0.0.1:8457/api/voice/live`;
+    const port = resolveBackendPort();
+    const wsUrl = `ws://127.0.0.1:${port}/api/voice/live`;
 
     this.websocket = new WebSocket(wsUrl);
     this.websocket.binaryType = "arraybuffer";

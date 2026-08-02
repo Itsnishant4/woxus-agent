@@ -11,7 +11,7 @@ hidden_imports = collect_submodules("faster_whisper") + [
     "llama_cpp",
     "ctranslate2",
     "tokenizers",
-    "pymongo",
+    "certifi",  # CA bundle — packaged_entry sets SSL_CERT_FILE to certifi.where()
     "huggingface_hub",
     "dotenv",
 ]
@@ -19,6 +19,9 @@ hidden_imports = collect_submodules("faster_whisper") + [
 datas = (
     collect_data_files("tokenizers")
     + collect_data_files("faster_whisper", include_py_files=False)
+    # certifi/cacert.pem — without it the packaged app can't verify TLS
+    # certs (model downloads + license server fail with CERTIFICATE_VERIFY_FAILED)
+    + collect_data_files("certifi")
 )
 
 binaries = (
@@ -53,7 +56,10 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True,
+    # Windowed subsystem: on Windows a console=True bootloader spawns a cmd
+    # window for the backend (closing it kills the app); the backend runs as a
+    # child of Electron and writes logs to woxus.log instead of a terminal.
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

@@ -25,6 +25,15 @@ extraResources:
       - "**/*"
 mac:
   icon: ../icons/macos/icon.icns
+  # Ad-hoc code signing (free, no Apple Developer Program). "identity": "-"
+  # signs with an ad-hoc identity so the app is NOT unsigned. Without this,
+  # the app is completely unsigned and macOS shows "damaged and can't be
+  # opened". Ad-hoc signing makes it launch normally (users just right-click
+  # → Open once instead of getting a hard "damaged" block).
+  identity: "-"
+  # Ad-hoc identity + hardened runtime can block unsigned nested native
+  # binaries (nut-js .node). Disable hardened runtime for ad-hoc builds.
+  hardenedRuntime: false
   target:
     - target: dmg
       arch:

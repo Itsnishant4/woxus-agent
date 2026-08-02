@@ -124,8 +124,11 @@ export default function App() {
   const location = useLocation();
 
   const checkModelStatus = useCallback(async () => {
+    // The bundled backend cold-starts slowly (imports llama_cpp, faster_whisper,
+    // ctranslate2 on first launch) — allow up to ~60s before giving up. This is
+    // a LOCAL backend on 127.0.0.1; do not point these calls at a remote URL.
     let attempts = 0;
-    while (attempts < 20) {
+    while (attempts < 60) {
       try {
         const res = await window.fetch(`${API_BASE}/model/status`);
         if (res.ok) {

@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { networkInterfaces, hostname, platform } from 'os';
 import { settingsStore, CachedLicense, CachedTrial } from './store.js';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = 'http://127.0.0.1:8457/api';
 
 function getMacAddress(): string {
   const interfaces = networkInterfaces();

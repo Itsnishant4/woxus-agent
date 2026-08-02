@@ -30,7 +30,7 @@ function getBackendLaunch(): { bin: string; args: string[]; cwd: string } {
     : join(base, '.venv', 'bin', 'python');
   return {
     bin: pythonPath,
-    args: ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8000'],
+    args: ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8457'],
     cwd: join(__dirname, '..', '..'),
   };
 }

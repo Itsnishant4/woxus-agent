@@ -21,7 +21,7 @@ export class GeminiClient {
   }
 
   connect() {
-    const wsUrl = `ws://127.0.0.1:8000/api/voice/live`;
+    const wsUrl = `ws://127.0.0.1:8457/api/voice/live`;
 
     this.websocket = new WebSocket(wsUrl);
     this.websocket.binaryType = "arraybuffer";

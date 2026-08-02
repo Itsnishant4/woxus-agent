@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, Loader2 } from 'lucide-react';
-const API = 'http://127.0.0.1:8000/api';
+const API = 'http://127.0.0.1:8457/api';
 
 // Stable per-overlay-session id so the backend keeps conversation context
 const CONVERSATION_ID =

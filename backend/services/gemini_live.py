@@ -108,28 +108,21 @@ class GeminiLiveService:
     def _build_config(self) -> types.LiveConnectConfig:
         """Build the Live session config. History is replayed as turns, never
         injected into the system instruction."""
-        return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
+        config_kwargs: dict = {
+            "response_modalities": ["AUDIO"],
             # NOTE: no thinking_config — Gemini Live rejects thinking_budget on
             # the current models ("Extra inputs are not permitted").
-            speech_config=types.SpeechConfig(
+            "speech_config": types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
                         voice_name="Puck"
                     )
                 )
             ),
-            # Mirror the working reference app: the server ends speech turns
-            # based on actual audio activity (TURN_INCLUDES_ONLY_ACTIVITY), not
-            # on silence while mic background noise keeps streaming. Without this
-            # the default coverage keeps turns open — causing 20s+ latency / hangs.
-            realtime_input_config=types.RealtimeInputConfig(
-                turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
-            ),
             # Per-utterance transcription for accurate STT + latency measurement.
-            input_audio_transcription=types.AudioTranscriptionConfig(),
-            output_audio_transcription=types.AudioTranscriptionConfig(),
-            system_instruction=types.Content(parts=[
+            "input_audio_transcription": types.AudioTranscriptionConfig(),
+            "output_audio_transcription": types.AudioTranscriptionConfig(),
+            "system_instruction": types.Content(parts=[
                 types.Part(text=self.system_instruction or (
                     "You are Woxus, a smart and friendly voice assistant. "
                     "Keep spoken responses short and natural. Do NOT use markdown, bold, or headings.\n\n"
@@ -145,8 +138,19 @@ class GeminiLiveService:
                     "4. Keep all spoken responses natural, clear, and conversational."
                 )),
             ]),
-            tools=self.tools,
-        )
+            "tools": self.tools,
+        }
+        # Mirror the working reference app: the server ends speech turns based
+        # on actual audio activity (TURN_INCLUDES_ONLY_ACTIVITY), not on silence
+        # while mic background noise keeps streaming. Without this the default
+        # coverage keeps turns open — causing 20s+ latency / hangs. Only set it
+        # when the bundled google-genai exposes RealtimeInputConfig — older SDK
+        # builds lack the attribute and would crash session startup.
+        if hasattr(types, "RealtimeInputConfig"):
+            config_kwargs["realtime_input_config"] = types.RealtimeInputConfig(
+                turn_coverage="TURN_INCLUDES_ONLY_ACTIVITY",
+            )
+        return types.LiveConnectConfig(**config_kwargs)
 
     def _append_to_log(self, role: str, text: str):
         """Record a conversation turn. Only consecutive 'model' entries merge

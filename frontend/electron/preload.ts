@@ -39,4 +39,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Automation permission (macOS Accessibility)
   getPermissionStatus: () => ipcRenderer.invoke('permission:check'),
   openPermissionSettings: () => ipcRenderer.invoke('permission:open-settings'),
+  restartApp: () => ipcRenderer.invoke('app:restart'),
 });

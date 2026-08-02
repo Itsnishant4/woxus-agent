@@ -423,3 +423,9 @@ ipcMain.handle('permission:open-settings', () => {
   openPermissionSettings();
   return checkPermission();
 });
+// macOS requires the app to RESTART after granting Accessibility before
+// isTrustedAccessibilityClient returns true. The gate offers this button.
+ipcMain.handle('app:restart', () => {
+  app.relaunch();
+  app.exit(0);
+});

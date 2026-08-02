@@ -1,10 +1,15 @@
-import { ShieldAlert, Settings2 } from 'lucide-react';
+import { ShieldAlert, Settings2, RotateCw } from 'lucide-react';
 import { Button } from '@heroui/react';
 
 export default function PermissionGatePage() {
   const handleOpenSettings = () => {
     // @ts-ignore
     window.electronAPI?.openPermissionSettings?.();
+  };
+
+  const handleRestart = () => {
+    // @ts-ignore
+    window.electronAPI?.restartApp?.();
   };
 
   return (
@@ -22,13 +27,19 @@ export default function PermissionGatePage() {
               to paste generated prompts into your apps (browsers, editors, terminals).
             </p>
             <p className="text-xs text-muted-foreground/70 leading-relaxed">
-              Grant it in System Settings, then return here. Woxus stays locked until the permission is granted.
+              Grant it in System Settings, then <span className="text-foreground font-medium">restart Woxus</span> —
+              macOS only applies Accessibility permission after an app restart.
             </p>
           </div>
 
           <Button variant="primary" className="w-full" onPress={handleOpenSettings}>
             <Settings2 className="h-4 w-4" />
             Open System Settings
+          </Button>
+
+          <Button variant="secondary" className="w-full" onPress={handleRestart}>
+            <RotateCw className="h-4 w-4" />
+            Restart Woxus (after granting)
           </Button>
 
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">

@@ -12,8 +12,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ..config import get_api_keys
 from ..services.gemini_live import GeminiLiveService
-from ..services.tool_definitions import agent_tools
 from ..services.memory_engine import list_memories
+from ..services.tool_definitions import agent_tools
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

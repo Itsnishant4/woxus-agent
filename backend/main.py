@@ -1,14 +1,14 @@
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import chat, memory, settings, system, voice, terminal, notes, license, trial, feedback, tasks, model, overlay
 from .config import load_config
 from .middleware import license_check_middleware, trial_limiter_middleware
+from .routes import chat, feedback, license, memory, model, notes, overlay, settings, system, tasks, terminal, trial, voice
 
 
 @asynccontextmanager

@@ -30,7 +30,7 @@ def _save(memories: list[dict]):
     MEMORY_FILE.write_text(json.dumps(memories, indent=2, default=str))
 
 
-def list_memories(category: Optional[str] = None) -> list[dict]:
+def list_memories(category: str | None = None) -> list[dict]:
     mems = _load()
     if category:
         mems = [m for m in mems if m.get("category") == category]
@@ -66,7 +66,7 @@ def create_memory(category: str, content: str, importance: float = 0.5) -> dict:
     return mem
 
 
-def update_memory(memory_id: str, updates: dict) -> Optional[dict]:
+def update_memory(memory_id: str, updates: dict) -> dict | None:
     mems = _load()
     for m in mems:
         if m["id"] == memory_id:

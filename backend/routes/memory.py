@@ -2,14 +2,14 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
-from ..models.schemas import MemoryCreate, MemoryUpdate, MemoryOut
+from ..models.schemas import MemoryCreate, MemoryOut, MemoryUpdate
 from ..services import memory_engine
 
 router = APIRouter()
 
 
 @router.get("/")
-async def list_memories(category: Optional[str] = None):
+async def list_memories(category: str | None = None):
     mems = memory_engine.list_memories(category)
     return [MemoryOut(**m) for m in mems]
 

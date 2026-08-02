@@ -1,6 +1,7 @@
 """Woxus — API endpoints for Local Model (SmolLM3 3B) status and download management."""
 
 from fastapi import APIRouter
+
 from ..services.local_model import get_model_status, start_model_download
 
 router = APIRouter()

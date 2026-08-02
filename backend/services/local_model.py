@@ -4,17 +4,13 @@ Manages hardware detection (Apple Silicon Metal / NVIDIA CUDA / CPU), downloadin
 model weights, local installation, progress tracking, and local inference execution.
 """
 
-import asyncio
-import json
 import logging
 import os
 import platform
 import re
 import sys
 import threading
-import time
 import urllib.request
-from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -260,8 +256,7 @@ def _download_worker():
         while not stop.is_set():
             try:
                 on_disk = _on_disk_bytes()
-                if on_disk > peak_bytes:
-                    peak_bytes = on_disk
+                peak_bytes = max(peak_bytes, on_disk)
                 pct = min(100.0, round((peak_bytes / total_bytes) * 100, 1)) if total_bytes else 0.0
                 with _lock:
                     _model_status["bytes_downloaded"] = peak_bytes
@@ -315,8 +310,12 @@ async def run_local_mini_agent(prompt: str) -> dict:
     hw_info = status.get("hardware", _hw)
     logger.info("🤖 [LOCAL MINI AGENT] Executing task on %s: '%s'", hw_info["device"], prompt[:100])
 
+    from .mini_agent import (
+        _SHELL_KEYWORDS,
+        _normalize_and_optimize_command,
+        auto_heal_command,
+    )
     from .tool_executor import _execute_tool_raw
-    from .mini_agent import auto_heal_command, _SHELL_KEYWORDS, _normalize_and_optimize_command
 
     # Direct shell command (e.g. "pwd", "ls -la") — execute as-is without AI
     code_blocks = re.findall(r"```(?:bash|sh|shell)?\n(.*?\n?)```", prompt, re.DOTALL)
@@ -328,7 +327,7 @@ async def run_local_mini_agent(prompt: str) -> dict:
 
     if not direct_cmd:
         # Agentic loop: AI reasons → calls tools → sees results → answers
-        from .nano_inference import agent_step, is_model_ready, AGENT_PROMPT
+        from .nano_inference import AGENT_PROMPT, agent_step, is_model_ready
         if not is_model_ready():
             return {
                 "status": "info",
@@ -557,7 +556,7 @@ OVERLAY_AGENT_CONTEXT_BUDGET = 6000
 OVERLAY_AGENT_MIN_HISTORY_TURNS = 4
 
 
-async def run_overlay_agent(prompt: str, history: Optional[list] = None) -> dict:
+async def run_overlay_agent(prompt: str, history: list | None = None) -> dict:
     """Agentic overlay loop: the AI calls the terminal tool as many times as it needs, then answers.
 
     Unlike run_local_mini_agent (capped at 5 steps), this loop is unbounded so the AI can
@@ -572,8 +571,8 @@ async def run_overlay_agent(prompt: str, history: Optional[list] = None) -> dict
     hw_info = status.get("hardware", _hw)
     logger.info("🤖 [OVERLAY AGENT] Executing task on %s: '%s'", hw_info["device"], prompt[:100])
 
+    from .nano_inference import AGENT_PROMPT, agent_step, is_model_ready
     from .tool_executor import _execute_tool_raw
-    from .nano_inference import agent_step, is_model_ready, AGENT_PROMPT
 
     if not is_model_ready():
         return {

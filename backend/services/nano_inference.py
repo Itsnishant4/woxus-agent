@@ -13,7 +13,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from .local_model import _model_file_for, detect_hardware, MODEL_DIR
+from .local_model import MODEL_DIR, _model_file_for, detect_hardware
 
 SYSTEM_PROMPT = (
     "You are Woxus, a smart and helpful desktop AI assistant. "
@@ -103,7 +103,7 @@ def _load_model():
         return _llm
 
 
-def _extract_json(text: str) -> Optional[dict]:
+def _extract_json(text: str) -> dict | None:
     """Extract the first JSON object from model output. None if none found."""
     text = text.strip()
     try:
@@ -119,7 +119,7 @@ def _extract_json(text: str) -> Optional[dict]:
     return None
 
 
-def agent_step(messages: list, max_tokens: int = 400) -> Optional[dict]:
+def agent_step(messages: list, max_tokens: int = 400) -> dict | None:
     """One inference step in the agentic loop. Returns the AI's parsed JSON decision or None."""
     llm = _load_model()
     if llm is None:
@@ -138,7 +138,7 @@ def agent_step(messages: list, max_tokens: int = 400) -> Optional[dict]:
     return _extract_json(raw)
 
 
-def chat(user_text: str, system: str = SYSTEM_PROMPT, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
+def chat(user_text: str, system: str = SYSTEM_PROMPT, max_tokens: int = 256, temperature: float = 0.7) -> str | None:
     """Run a single-turn chat completion with NanoAgent. Returns None if model unavailable."""
     llm = _load_model()
     if llm is None:

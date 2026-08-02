@@ -6,7 +6,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-async def generate_prompt(intent: str, context: Optional[str] = None) -> dict:
+async def generate_prompt(intent: str, context: str | None = None) -> dict:
     """Generate a structured prompt from a user's natural language intent.
 
     Phase 5 will add:

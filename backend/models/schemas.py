@@ -1,9 +1,10 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class SendMessageRequest(BaseModel):
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     content: str
 
 
@@ -37,9 +38,9 @@ class MemoryCreate(BaseModel):
 
 
 class MemoryUpdate(BaseModel):
-    content: Optional[str] = None
-    importance: Optional[float] = None
-    active: Optional[bool] = None
+    content: str | None = None
+    importance: float | None = None
+    active: bool | None = None
 
 
 class MemorySearchResult(BaseModel):
@@ -106,26 +107,26 @@ class LicenseVerifyRequest(BaseModel):
 
 class LicenseVerifyResponse(BaseModel):
     valid: bool
-    expiry: Optional[str] = None
+    expiry: str | None = None
     features: list[str] = []
-    reason: Optional[str] = None
-    offline: Optional[bool] = None
+    reason: str | None = None
+    offline: bool | None = None
 
 
 class TrialStartRequest(BaseModel):
     hardware_id: str
-    device_info: Optional[str] = None
-    email: Optional[str] = None
+    device_info: str | None = None
+    email: str | None = None
 
 
 class TrialStatusResponse(BaseModel):
     active: bool
     remaining_seconds: int
     total_seconds: int
-    email: Optional[str] = None
+    email: str | None = None
 
 
 class FeedbackSubmit(BaseModel):
     rating: int
-    text: Optional[str] = None
-    hardware_id: Optional[str] = None
+    text: str | None = None
+    hardware_id: str | None = None

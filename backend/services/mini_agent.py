@@ -92,7 +92,7 @@ async def auto_heal_command(
     error_message: str,
     stdout: str = "",
     stderr: str = "",
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
 ) -> dict:
     """Run 100% local mini-agent loop to repair a failed command up to 10 attempts without remote API calls."""
     # Execute the (already AI-decided) command, repairing failures up to 10 attempts
@@ -101,7 +101,6 @@ async def auto_heal_command(
     logger.info("🤖 [LOCAL MINI-AGENT] Taking over task: '%s' -> Resolved shell command: '%s'", original_command, target_cmd)
 
     current_error = f"Error: {error_message}\nStderr: {stderr[-1000:]}\nStdout: {stdout[-1000:]}"
-    work_dir = cwd or os.path.expanduser("~")
 
     from .tool_executor import _execute_tool_raw
 

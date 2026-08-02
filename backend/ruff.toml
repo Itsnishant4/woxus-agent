@@ -1,0 +1,19 @@
+# Ruff config for the Woxus backend.
+#
+# Uses ruff's DEFAULT rule set (E, F, W + common extras) with a few ignores to
+# match the existing codebase style. The release workflow (release.yml) does NOT
+# run ruff — this only affects the Backend CI lint check.
+
+line-length = 160
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+  "F401",    # __init__.py re-exports (middleware, tools) are intentional
+  "F403",    # models/__init__.py re-exports schemas via wildcard intentionally
+  "E402",    # nano_inference lazy-loads the local model import after logger
+  "E501",    # long descriptive lines are existing style
+  "E701",    # one-line try/except cleanup is existing style
+  "E722",    # bare except for cleanup — existing style
+]

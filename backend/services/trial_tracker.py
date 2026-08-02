@@ -28,7 +28,7 @@ def _get_trial_duration_from_mongo() -> int:
     return TRIAL_DURATION_SECONDS
 
 
-def _has_existing_trial_in_mongo(hardware_id: str, email: Optional[str]) -> Optional[dict]:
+def _has_existing_trial_in_mongo(hardware_id: str, email: str | None) -> dict | None:
     try:
         import pymongo
         uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
@@ -51,7 +51,7 @@ def _has_existing_trial_in_mongo(hardware_id: str, email: Optional[str]) -> Opti
     return None
 
 
-def _upsert_user_to_mongo(hardware_id: str, email: Optional[str], device_info: Optional[str], total_seconds: int):
+def _upsert_user_to_mongo(hardware_id: str, email: str | None, device_info: str | None, total_seconds: int):
     try:
         import pymongo
         uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
@@ -93,7 +93,7 @@ def _save_trials(trials: dict):
     TRIAL_FILE.write_text(json.dumps(trials, indent=2))
 
 
-def start_trial(hardware_id: str, device_info: Optional[str] = None, email: Optional[str] = None) -> dict:
+def start_trial(hardware_id: str, device_info: str | None = None, email: str | None = None) -> dict:
     trials = _load_trials()
     total_seconds = _get_trial_duration_from_mongo()
 

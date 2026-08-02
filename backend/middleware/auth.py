@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from ..services.license import verify_key

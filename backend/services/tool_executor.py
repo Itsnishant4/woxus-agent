@@ -11,8 +11,10 @@ import os
 import time
 from typing import Any, Optional
 
-from .memory_engine import create_memory, list_memories, delete_memory as delete_memory_svc
-from .file_writer import write_file as write_file_svc, read_text_file
+from .file_writer import read_text_file
+from .file_writer import write_file as write_file_svc
+from .memory_engine import create_memory, list_memories
+from .memory_engine import delete_memory as delete_memory_svc
 from .task_manager import get_task_manager
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ ALLOWED_EXTENSIONS = {
 }
 
 
-def _check_dangerous(command: str) -> Optional[str]:
+def _check_dangerous(command: str) -> str | None:
     cmd_lower = command.lower()
     for kw in DANGEROUS_KEYWORDS:
         if kw in cmd_lower:
@@ -230,12 +232,6 @@ async def _memory_create(args: dict) -> dict:
         return {"success": True, "memory": memory}
     except Exception as e:
         return {"error": str(e)}
-
-
-def _memory_search(args: dict) -> dict:
-    results = search_memories(query=args["query"])
-    limit = min(args.get("limit", 10), 50)
-    return {"results": results[:limit], "count": len(results)}
 
 
 def _memory_list(args: dict) -> dict:

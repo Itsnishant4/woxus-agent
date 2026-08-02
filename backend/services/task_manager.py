@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 class BackgroundTask:
     state: str  # "running" | "done" | "failed"
-    exit_code: Optional[int]
+    exit_code: int | None
     stdout: str
     stderr: str
     start_time: float
-    end_time: Optional[float]
+    end_time: float | None
 
-    def __init__(self, command: str, cwd: Optional[str] = None):
+    def __init__(self, command: str, cwd: str | None = None):
         self.task_id = uuid.uuid4().hex[:12]
         self.command = command
         self.cwd = cwd or os.getcwd()
@@ -59,7 +59,7 @@ class TaskManager:
         self._tasks: dict[str, BackgroundTask] = {}
         self._max_tasks = max_tasks
 
-    async def start(self, command: str, cwd: Optional[str] = None) -> BackgroundTask:
+    async def start(self, command: str, cwd: str | None = None) -> BackgroundTask:
         """Start a command in the background."""
         if len(self._tasks) >= self._max_tasks:
             # Evict oldest completed task
@@ -131,7 +131,7 @@ class TaskManager:
         logger.info("Background task %s started: %s", task.task_id, command[:120])
         return task
 
-    def get(self, task_id: str) -> Optional[BackgroundTask]:
+    def get(self, task_id: str) -> BackgroundTask | None:
         return self._tasks.get(task_id)
 
     def list(self) -> list[BackgroundTask]:

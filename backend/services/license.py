@@ -3,7 +3,7 @@ import logging
 import os
 import urllib.request
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pymongo
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_expiry(value) -> datetime | None:
@@ -22,7 +22,7 @@ def _parse_expiry(value) -> datetime | None:
         return None
     if isinstance(value, datetime):
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
+            return value.replace(tzinfo=UTC)
         return value
     if isinstance(value, str):
         s = value.strip()
@@ -33,7 +33,7 @@ def _parse_expiry(value) -> datetime | None:
         except ValueError:
             return None
         if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
+            return dt.replace(tzinfo=UTC)
         return dt
     return None
 

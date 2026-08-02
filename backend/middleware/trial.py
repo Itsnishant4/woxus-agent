@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 
 from ..services import trial_tracker
 

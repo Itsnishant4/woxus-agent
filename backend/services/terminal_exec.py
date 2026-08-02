@@ -20,7 +20,7 @@ async def execute_command(
     command: str,
     timeout: int = 30,
     max_retries: int = 3,
-    workdir: Optional[str] = None,
+    workdir: str | None = None,
 ) -> dict:
     if _is_dangerous(command):
         return {
@@ -56,7 +56,7 @@ async def execute_command(
             if attempt < max_retries:
                 await asyncio.sleep(2 ** attempt)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Attempt %d/%d timed out: %s", attempt, max_retries, command[:80])
             if attempt < max_retries:
                 await asyncio.sleep(2 ** attempt)

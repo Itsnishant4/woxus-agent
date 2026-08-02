@@ -1,1 +1,1 @@
-from . import chat, memory, settings, system, voice, terminal, notes, license, trial, feedback
+from . import chat, feedback, license, memory, notes, settings, system, terminal, trial, voice

@@ -74,7 +74,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: frontend/backend/dist/woxus-backend
+          # Must match electron-builder's extraResources `from: ../backend/dist/woxus-backend`
+          # which resolves to repo-root backend/dist/woxus-backend (NOT frontend/backend/...).
+          path: backend/dist/woxus-backend
 
       - run: pnpm install --frozen-lockfile
 

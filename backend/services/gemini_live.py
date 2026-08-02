@@ -17,40 +17,15 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from .stt import transcribe_pcm16
 from .tool_executor import handle_tool_call
 
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_TURNS = 10
 
-# User audio is transcribed locally (whisper) in these rolling windows so
-# voice turns survive session restarts (kept short to stay out of the
-# real-time path). Runs in a thread executor — never blocks the hot path.
-STT_WINDOW_SECONDS = 3
-STT_MERGE_GAP_SECONDS = 2.0
-
-
-def _transcribe_worker(svc: "GeminiLiveService", pcm: bytes):
-    """Background whisper transcription of one audio window."""
-    try:
-        text = transcribe_pcm16(pcm)
-        if not text:
-            return
-        now = time.time()
-        log = svc.conversation_log
-        if (
-            log and log[-1]["role"] == "user"
-            and now - svc._last_log_ts < STT_MERGE_GAP_SECONDS
-        ):
-            # Continuation of the same utterance across window boundaries
-            log[-1]["text"] = text
-        else:
-            svc._append_to_log("user", text)
-        svc._last_log_ts = now
-        logger.info("🗣️ [SPEECH LOG] (whisper) User spoke: %s", text[:80])
-    except Exception as e:
-        logger.debug("Whisper transcription failed: %s", e)
+# No local whisper STT on the live path — user transcripts come from Gemini's
+# built-in input_audio_transcription, which keeps the session fast (the
+# reference app does no local STT).
 
 
 class GeminiLiveService:
@@ -90,7 +65,6 @@ class GeminiLiveService:
         self._session_error: str | None = None
         self._stop_requested = False
         self.conversation_log: list[dict] = []
-        self._last_log_ts = 0.0
         # Background tool tasks (e.g. delegate_task_to_mini_agent) that run
         # without blocking the Gemini receive loop.
         self._bg_tool_tasks: set[asyncio.Task] = set()
@@ -302,21 +276,11 @@ class GeminiLiveService:
         mime_type = f"audio/pcm;rate={self.input_sample_rate}"
 
         async def send_audio():
-            stt_buffer = bytearray()
             try:
                 while self._running:
                     chunk = await audio_input_queue.get()
                     if chunk is None:
                         break
-                    # Local whisper transcription window (non-blocking)
-                    stt_buffer.extend(chunk)
-                    window_bytes = self.input_sample_rate * 2 * STT_WINDOW_SECONDS
-                    if len(stt_buffer) >= window_bytes:
-                        window = bytes(stt_buffer[:window_bytes])
-                        del stt_buffer[:window_bytes]
-                        asyncio.get_running_loop().run_in_executor(
-                            None, _transcribe_worker, self, window
-                        )
                     self._last_audio_sent_time = time.time()
                     await session.send_realtime_input(
                         audio=types.Blob(data=chunk, mime_type=mime_type)

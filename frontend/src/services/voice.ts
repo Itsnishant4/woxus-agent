@@ -68,15 +68,9 @@ export async function startVoiceSession(
           });
           store.setMicActive(true);
 
-          // Greet the user on connect so Woxus speaks first — the user
-          // shouldn't have to speak to start the conversation. This is the
-          // same pattern the reference app uses (sends a hidden instruction
-          // on WebSocket open). Sent as a real text turn so Gemini replies
-          // with voice immediately.
-          if (geminiClient?.isConnected()) {
-            geminiClient.sendText('Greet me.');
-          }
-
+          // No greeting on connect — the agent is instantly listening so the
+          // first response is to the user's actual voice (matches the reference
+          // app; skips a full Gemini round-trip before the user can speak).
           resolve();
         } catch (e) {
           _connectingLock = false;

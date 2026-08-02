@@ -58,13 +58,30 @@ async def gemini_live_websocket(websocket: WebSocket):
     audio_input_queue: asyncio.Queue[bytes] = asyncio.Queue()
     video_input_queue: asyncio.Queue[bytes] = asyncio.Queue()
     text_input_queue: asyncio.Queue = asyncio.Queue()
+    # Outbound audio is queued (not sent inline) so a slow renderer playback
+    # queue can never stall Gemini's receive loop. Bounded; a full queue means
+    # the client is far behind, so the newest chunk is dropped rather than
+    # blocking the session.
+    audio_output_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=256)
 
     async def audio_output_callback(data: bytes):
-        """Relay Gemini audio response back to frontend."""
+        """Enqueue Gemini audio for the sender task. Non-blocking so the Gemini
+        receive loop is never stalled by a slow renderer playback queue."""
         try:
-            await websocket.send_bytes(data)
-        except Exception:
-            logger.debug("Failed to send audio to frontend")
+            audio_output_queue.put_nowait(data)
+        except asyncio.QueueFull:
+            # Client is far behind — drop the newest chunk rather than block.
+            logger.debug("Audio output queue full — dropping chunk")
+
+    async def audio_sender():
+        """Drain the outbound audio queue and push bytes to the renderer."""
+        while True:
+            data = await audio_output_queue.get()
+            try:
+                await websocket.send_bytes(data)
+            except Exception:
+                logger.debug("Failed to send audio to frontend")
+                break
 
     async def audio_interrupt_callback():
         """Notify frontend that Gemini was interrupted."""
@@ -115,12 +132,15 @@ async def gemini_live_websocket(websocket: WebSocket):
         await websocket.close()
         return
 
-    # Inject stored memories into the system prompt so Woxus always knows
-    # them from the very first turn — e.g. "User prefers to converse in
-    # Gujarati" → Woxus greets and responds in Gujarati from the start.
+    # Inject the most important stored memories into the system prompt so Woxus
+    # knows them from the very first turn. Capped so a large memory store can't
+    # inflate the prompt and slow the first token (list_memories sorts by
+    # importance descending).
     try:
-        memories = list_memories()
+        memories = list_memories()[:20]
         mem_lines = "\n".join(f"- {m['content']}" for m in memories) if memories else "None yet."
+        if len(mem_lines) > 2000:
+            mem_lines = mem_lines[:1997] + "..."
     except Exception as e:
         logger.warning("Memory injection failed: %s", e)
         mem_lines = "None yet."
@@ -170,7 +190,8 @@ async def gemini_live_websocket(websocket: WebSocket):
         except Exception as e:
             logger.error("Error receiving from client: %s", e)
 
-    # Run receive loop and Gemini session concurrently
+    # Run receive loop, audio sender, and Gemini session concurrently
+    audio_sender_task = asyncio.create_task(audio_sender())
     try:
         await asyncio.gather(
             receive_from_client(),
@@ -192,6 +213,7 @@ async def gemini_live_websocket(websocket: WebSocket):
         except Exception:
             pass
     finally:
+        audio_sender_task.cancel()
         gemini_client.stop()
         if gemini_client._session_error:
             logger.error("Voice session ended with error: %s", gemini_client._session_error[:300])

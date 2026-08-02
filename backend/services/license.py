@@ -5,8 +5,6 @@ import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta, timezone
 
-import pymongo
-
 from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
@@ -50,6 +48,10 @@ def _get_mongo_collection():
     if not uri:
         return None
     try:
+        # Lazy import: pymongo is a dev-only fallback (not in requirements.txt),
+        # so it isn't bundled into the packaged app. Import it here so an absent
+        # pymongo degrades to "no Mongo fallback" instead of crashing startup.
+        import pymongo
         if _mongo_client is None:
             _mongo_client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=800)
         return _mongo_client.get_database()["licenses"]

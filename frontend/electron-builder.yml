@@ -25,9 +25,12 @@ extraResources:
       - "**/*"
 mac:
   icon: ../icons/macos/icon.icns
-  # No code signing (no Apple Developer Program). The app is unsigned, so
-  # macOS shows "Apple cannot verify" once — users right-click → Open.
-  #
+  # Ad-hoc code signing (free, no Apple Developer Program) — makes the app
+  # launch without the "damaged" error. Users right-click → Open once.
+  identity: "-"
+  hardenedRuntime: false
+  entitlements: null
+  entitlementsInherit: null
   # No "universal" fat-binary target: merging arm64+x64 fails because the
   # bundled PyInstaller backend ships arch-specific binaries (Python.framework)
   # that electron-builder can't merge. Ship arm64 (Apple Silicon) and x64

@@ -171,3 +171,5 @@ git push origin v0.1.1
 | Users see banner but "Download" fails | macOS unsigned fresh-install | Tell user to right-click → Open once; win/linux fine |
 | Build fails on backend job | PyInstaller spec / Python deps | Check `backend/woxus_backend.spec`, `requirements.txt` |
 | `pnpm install --frozen-lockfile` fails | Lockfile out of date | Run `pnpm install` locally, commit `pnpm-lock.yaml` |
+
+

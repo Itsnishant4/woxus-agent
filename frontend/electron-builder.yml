@@ -28,22 +28,24 @@ mac:
   # Ad-hoc code signing (free, no Apple Developer Program) — makes the app
   # launch without the "damaged" error. Users right-click → Open once.
   identity: "-"
+  # Skip deep-signing the bundled PyInstaller backend. macOS codesign rejects
+  # PyInstaller's Python.framework with "bundle format is ambiguous (could be
+  # app or framework)". The backend is launched as a child process and needs
+  # no signature; the outer .app remains ad-hoc signed.
+  signIgnore:
+    - "/Contents/Resources/backend/"
   hardenedRuntime: false
   entitlements: null
   entitlementsInherit: null
   # No "universal" fat-binary target: merging arm64+x64 fails because the
   # bundled PyInstaller backend ships arch-specific binaries (Python.framework)
-  # that electron-builder can't merge. Ship arm64 (Apple Silicon) and x64
-  # (Intel) as separate installers instead.
+  # that electron-builder can't merge. Each mac arch is built by a dedicated
+  # CI job that passes --arm64 / --x64 and downloads an architecture-matched
+  # backend — see .github/workflows/release.yml. Pinning arch here would make
+  # electron-builder ignore the CLI arch flag and build both with one backend.
   target:
     - target: dmg
-      arch:
-        - arm64
-        - x64
     - target: zip
-      arch:
-        - arm64
-        - x64
   artifactName: ${productName}-${version}-${arch}.${ext}
   extendInfo:
     NSMicrophoneUsageDescription: Woxus uses the microphone to animate the orb when you speak.

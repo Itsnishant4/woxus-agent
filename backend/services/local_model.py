@@ -135,8 +135,12 @@ def start_model_download() -> dict:
 
 
 def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) -> bool:
-    """Stdlib-only parallel downloader: `streams` concurrent Range requests written to
-    part files, then concatenated in order. Much faster than a single stream."""
+    """Stdlib-only parallel downloader with RESUME support.
+
+    `streams` concurrent Range requests write to part files, then concatenated
+    in order. If a stream fails, the parts already downloaded are KEPT so a
+    retry can resume from where it left off (progress never resets to 0).
+    """
     import threading as _t
 
     part_files = [f"{dest}.p{i}" for i in range(streams)]
@@ -144,8 +148,20 @@ def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) 
     chunk_size = (total_bytes + streams - 1) // streams
 
     def _worker(i: int):
-        start = i * chunk_size
-        end = min(start + chunk_size - 1, total_bytes - 1)
+        part = part_files[i]
+        # Resume: if a partial file already exists from a previous attempt,
+        # continue from its current size instead of restarting the stream.
+        resume_at = 0
+        try:
+            if os.path.exists(part):
+                resume_at = os.path.getsize(part)
+        except Exception:
+            pass
+        start = i * chunk_size + resume_at
+        end = min((i + 1) * chunk_size - 1, total_bytes - 1)
+        if resume_at >= end - start + 1 or start > end:
+            ok[i] = True
+            return
         try:
             req = urllib.request.Request(
                 url,
@@ -154,7 +170,7 @@ def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) 
                     "User-Agent": "Mozilla/5.0 (Woxus-Local-Installer)",
                 },
             )
-            with urllib.request.urlopen(req, timeout=60) as resp, open(part_files[i], "wb") as out_f:
+            with urllib.request.urlopen(req, timeout=60) as resp, open(part, "ab") as out_f:
                 while True:
                     chunk = resp.read(1 << 20)
                     if not chunk:
@@ -162,7 +178,7 @@ def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) 
                     out_f.write(chunk)
             ok[i] = True
         except Exception as e:
-            logger.warning("🤖 [LOCAL MODEL] Parallel stream %d failed: %s", i, e)
+            logger.warning("🤖 [LOCAL MODEL] Parallel stream %d failed (resume@%d): %s", i, resume_at, e)
 
     threads = [_t.Thread(target=_worker, args=(i,), daemon=True) for i in range(streams)]
     for t in threads:
@@ -170,10 +186,8 @@ def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) 
     for t in threads:
         t.join()
 
+    # If any stream failed, KEEP the partials so the next attempt resumes.
     if not all(ok):
-        for p in part_files:
-            try: os.remove(p)
-            except Exception: pass
         return False
 
     with open(dest, "wb") as out_f:
@@ -202,17 +216,23 @@ def _download_worker():
 
     download_success = False
 
-    # Fast path: parallel Range download from the Ollama registry (fast, no HF)
+    # Fast path: parallel Range download from the Ollama registry (fast, no HF).
+    # Set total_bytes FIRST so the UI shows "0 / 200 MB" immediately, not
+    # "Preparing…" while we wait for the HEAD request.
     total_bytes = MODEL_BYTES
+    with _lock:
+        _model_status["total_bytes"] = total_bytes
+        _model_status["bytes_downloaded"] = 0
+        _model_status["progress"] = 0.0
+        _model_status["status_text"] = f"Downloading Local Mini Agent (0.0 MB / {round(total_bytes/1024/1024,1)} MB)"
     try:
         req = urllib.request.Request(target_url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             total_bytes = int(resp.headers.get("Content-Length") or 0) or MODEL_BYTES
+            with _lock:
+                _model_status["total_bytes"] = total_bytes
     except Exception:
         pass
-    with _lock:
-        _model_status["total_bytes"] = total_bytes
-        _model_status["status_text"] = f"Downloading Local Mini Agent ({_hw['device']})..."
 
     import threading as _t
     stop = _t.Event()
@@ -230,15 +250,23 @@ def _download_worker():
             pass
         return size
 
+    # Never let progress go backward: keep the highest bytes seen. During the
+    # concat/rename phase parts disappear (bytes dip), but the UI should only
+    # ever move forward toward 100%.
+    peak_bytes = 0
+
     def _progress_poller():
+        nonlocal peak_bytes
         while not stop.is_set():
             try:
                 on_disk = _on_disk_bytes()
-                pct = min(100.0, round((on_disk / total_bytes) * 100, 1)) if total_bytes else 0.0
+                if on_disk > peak_bytes:
+                    peak_bytes = on_disk
+                pct = min(100.0, round((peak_bytes / total_bytes) * 100, 1)) if total_bytes else 0.0
                 with _lock:
-                    _model_status["bytes_downloaded"] = on_disk
+                    _model_status["bytes_downloaded"] = peak_bytes
                     _model_status["progress"] = pct
-                    mb_down = round(on_disk / (1024 * 1024), 1)
+                    mb_down = round(peak_bytes / (1024 * 1024), 1)
                     mb_total = round(total_bytes / (1024 * 1024), 1)
                     _model_status["status_text"] = f"Downloading Local Mini Agent ({mb_down} MB / {mb_total} MB)"
             except Exception:

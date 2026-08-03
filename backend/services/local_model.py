@@ -329,6 +329,30 @@ async def run_local_mini_agent(prompt: str) -> dict:
     # Direct "type/paste the prompt: 'X'" request — type it immediately instead
     # of running the slow agentic loop (~seconds of local inference). The
     # frontend receives action='paste' and types it via nut.js right away.
+    # A "TYPE_TEXT:" task from the main agent must ALWAYS be typed, never
+    # reasoned about or answered with text.
+    if prompt.strip().upper().startswith("TYPE_TEXT:"):
+        forced = prompt.split(":", 1)[1].strip()
+        if forced:
+            logger.info("🤖 [LOCAL MINI AGENT] Forced type task: %r", forced[:60])
+            res = await _execute_tool_raw("write_to_focused_input", {
+                "text": forced,
+                "_from_mini_agent": True,
+            })
+            if res.get("ok"):
+                return {
+                    "status": "success",
+                    "device": hw_info["device"],
+                    "prompt": prompt,
+                    "attempts_count": 1,
+                    "tools_executed": [f"write_to_focused_input: {forced[:40]}"],
+                    "execution_trace": [],
+                    "action": "paste",
+                    "text": forced,
+                    "mini_agent_output": res.get("text") or "Typed into focused input.",
+                    "message": res.get("text") or "Typed into focused input.",
+                }
+
     if not direct_cmd and re.search(r"^(?:please\s+)?(?:type|paste|write|enter)\b", prompt, re.IGNORECASE):
         quoted = re.findall(r"[`'\"]\s*([^`'\"]+?)\s*[`'\"]", prompt)
         text = quoted[-1].strip() if quoted else ""

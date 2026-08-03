@@ -165,6 +165,13 @@ async def gemini_live_websocket(websocket: WebSocket):
         try:
             while True:
                 message = await websocket.receive()
+                # Starlette returns a websocket.disconnect message once, then
+                # raises RuntimeError on the NEXT receive() call. Break here so
+                # a clean session close doesn't spam "Cannot call receive once
+                # a disconnect message has been received".
+                if message.get("type") == "websocket.disconnect":
+                    logger.info("Frontend WebSocket disconnected")
+                    break
 
                 if message.get("bytes"):
                     await audio_input_queue.put(message["bytes"])

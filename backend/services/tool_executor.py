@@ -25,6 +25,55 @@ DANGEROUS_KEYWORDS = [
     "curl ", "nc -e ", "bash -i ",
 ]
 
+# Known shell tools/executables. A command that doesn't start with one of
+# these (and isn't a path/flag/env-assignment) is natural-language text — it
+# must NOT be executed as a shell command (was causing exit-2 failures and an
+# infinite auto-heal loop when the mini-agent passed English sentences).
+_SHELL_START = (
+    "ls", "cd", "mkdir", "npx", "npm", "pnpm", "yarn", "python", "python3",
+    "node", "git", "cat", "pwd", "rm", "touch", "curl", "wget", "brew",
+    "open", "find", "echo", "sudo", "kill", "ps", "top", "df", "du",
+    "chmod", "cp", "mv", "sh", "bash", "zsh", "grep", "sed", "awk",
+    "tar", "unzip", "zip", "make", "cmake", "docker", "kubectl", "code",
+    "pip", "pip3", "defaults", "osascript", "plutil", "source", "export",
+)
+
+
+# Common English words that follow a tool name in a sentence ("find and open",
+# "open the PRD") — a real command never has these as its second token.
+_ENGLISH_WORDS = {
+    "and", "the", "to", "a", "for", "of", "me", "please", "i", "you",
+    "in", "on", "this", "that", "open", "read", "make", "create", "write",
+    "find", "check", "list", "show", "tell", "my", "your", "from", "with",
+    "new", "then", "is", "are", "it", "me", "can", "will", "do", "we",
+}
+
+
+def _looks_like_shell_command(cmd: str) -> bool:
+    """Heuristic: a real command starts with a known tool, a path, a flag, or an
+    env assignment. English sentences ("Find and read the PRD...", "open the PRD")
+    are NOT commands and must never run as one."""
+    cmd = (cmd or "").strip()
+    if not cmd:
+        return False
+    words = cmd.split()
+    first = words[0].lstrip("\"'").rstrip(";").lower()
+    # path / flag / env-assignment → command
+    if first.startswith(("./", "/", "~", "-")) or (
+        "=" in first and not first.startswith(("=", "=="))
+    ):
+        return True
+    if first in _SHELL_START:
+        # Known tool: but "find and open the document..." is English, not `find`.
+        # A real command's next token is a path/flag/option, not a sentence word.
+        if len(words) > 1:
+            second = words[1].lstrip("\"'-").rstrip(";,").lower()
+            if second in _ENGLISH_WORDS:
+                return False
+        return True
+    return False
+
+
 ALLOWED_EXTENSIONS = {
     ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css",
     ".json", ".txt", ".md", ".yaml", ".yml", ".toml",
@@ -98,6 +147,17 @@ async def _terminal_exec(args: dict) -> dict:
     command = args["command"]
     background = args.get("background", True)
     timeout = min(args.get("timeout_seconds", 30), 600)
+
+    # Never run natural-language text as a shell command (stops the infinite
+    # auto-heal loop + "not understanding" behaviour).
+    if not _looks_like_shell_command(command):
+        return {
+            "error": (
+                f"Not a terminal command: '{str(command)[:80]}'. "
+                "Give a real command like `ls` or `mkdir project`, not a description."
+            ),
+            "exit_code": -1,
+        }
 
     danger = _check_dangerous(command)
     if danger:

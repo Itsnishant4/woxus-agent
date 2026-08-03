@@ -16,7 +16,7 @@ export default function TitleBar() {
 
   return (
     <div
-      className="fixed top-0 inset-x-0 h-8 z-[100] flex items-center bg-[#0a0a0c]/85 backdrop-blur border-b border-border/40 select-none"
+      className="relative h-8 shrink-0 flex items-center bg-background/85 backdrop-blur-sm border-b border-border/60 select-none"
       style={drag}
     >
       {isMac ? (
@@ -47,7 +47,7 @@ export default function TitleBar() {
         <div className="flex-1" />
       )}
 
-      <div className="flex-1 text-center text-[11px] text-muted-foreground/50 font-medium truncate">
+      <div className="flex-1 text-center text-[11px] text-muted-foreground/70 font-medium truncate">
         Woxus
       </div>
 

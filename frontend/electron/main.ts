@@ -35,6 +35,9 @@ function createWindow() {
     minHeight: 600,
     show: false,
     title: 'Woxus',
+    // Frameless + custom traffic-light buttons in the renderer (replaces the
+    // native macOS/Windows title bar).
+    frame: false,
     icon: iconPath(iconFile),
     backgroundColor: '#09090b',
     webPreferences: {
@@ -126,6 +129,10 @@ function createOrbWindow(display: Electron.Display) {
 
   // Keep the orb above regular windows without stealing focus
   orb.setAlwaysOnTop(true, 'screen-saver');
+  // The orb is a small indicator — never let it become fullscreen/maximized
+  // (avoids a stuck fullscreen mini-window after the main window closes).
+  orb.setFullScreenable(false);
+  orb.setMaximizable(false);
   orb.setPosition(
     workArea.x + workArea.width - ORB_SIZE - 24,
     workArea.y + workArea.height - ORB_SIZE - 24,
@@ -402,6 +409,15 @@ ipcMain.on('orb-toggle-main', () => {
     mainWindow?.focus();
   }
 });
+
+// Custom window controls (frameless main window)
+ipcMain.on('win:minimize', () => mainWindow?.minimize());
+ipcMain.on('win:toggle-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+ipcMain.on('win:close', () => mainWindow?.close());
 
 // License IPC handlers
 ipcMain.handle('hardware:get-id', () => getHardwareId());

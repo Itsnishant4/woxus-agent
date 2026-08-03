@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getGeminiModel: () => ipcRenderer.invoke('get-gemini-model'),
   setGeminiModel: (model: string) => ipcRenderer.invoke('set-gemini-model', model),
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
+  // Custom traffic-light window controls (frameless main window)
+  minimizeWindow: () => ipcRenderer.send('win:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.send('win:toggle-maximize'),
+  closeWindow: () => ipcRenderer.send('win:close'),
   toggleMainWindow: () => ipcRenderer.send('orb-toggle-main'),
   platform: process.platform,
 

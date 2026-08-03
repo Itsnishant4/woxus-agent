@@ -18,6 +18,7 @@ import PermissionGatePage from '@pages/PermissionGatePage';
 import Toaster from '@components/Toast';
 import ModelDownloadScreen from '@components/ModelDownloadScreen';
 import ReportBugModal from '@components/ReportBugModal';
+import TitleBar from '@components/TitleBar';
 import { useTheme } from '@/hooks/useTheme';
 
 type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
@@ -259,12 +260,15 @@ export default function App() {
 
   if (appStatus === 'loading' || modelReady === null) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen flex-col bg-background">
+        <TitleBar />
+        <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 mx-auto rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
             <span className="text-lg font-bold text-white">W</span>
           </div>
           <p className="text-sm text-muted-foreground animate-pulse">Initializing Woxus...</p>
+        </div>
         </div>
       </div>
     );
@@ -272,7 +276,8 @@ export default function App() {
 
   if (appStatus === 'unlicensed') {
     return (
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen flex-col bg-background">
+        <TitleBar />
         <main className="flex-1 overflow-y-auto">
           <LicensePage onActivated={checkLicense} />
         </main>
@@ -282,7 +287,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground selection:bg-primary/10">
+    <div className="flex h-screen flex-col bg-background text-foreground selection:bg-primary/10">
+      <TitleBar />
+      <div className="flex flex-1 min-h-0">
       {/* Sidebar */}
       <aside
         className={`flex flex-col border-r border-border bg-sidebar transition-all duration-300 ease-out ${
@@ -447,6 +454,7 @@ export default function App() {
           </Routes>
         </div>
       </main>
+      </div>
 
       {/* Command Palette */}
       <CmdPalette open={cmdOpen} onOpenChange={setCmdOpen} />

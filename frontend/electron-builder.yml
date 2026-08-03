@@ -2,8 +2,8 @@ appId: com.woxus.app
 productName: Woxus
 publish:
   provider: github
-  owner: Itsnishant4
-  repo: woxus-agent
+  owner: woxus-agent
+  repo: woxus
   # No explicit token: electron-builder's GitHub provider auto-reads
   # GH_TOKEN / GITHUB_TOKEN from the environment (set in CI). This lets
   # local `electron:package` (--publish never) build without a token.

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useVoiceStore } from '../store/voice';
-import { startVoiceSession, stopVoiceSession } from '../services/voice';
+import { startVoiceSession, stopVoiceSession, sendTextMessage } from '../services/voice';
 import { Loader2, Terminal } from 'lucide-react';
 import ModelDownloadBanner from '../components/ModelDownloadBanner';
 import { API_BASE } from '../services/api';
@@ -21,6 +21,9 @@ export default function HomePage() {
   const { connected, isListening, sttStatus } = useVoiceStore();
   const [error, setError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Test-only: send a text prompt to the voice agent (for machines where mic
+  // input is unavailable). The agent replies with voice.
+  const [testPrompt, setTestPrompt] = useState('');
 
   useEffect(() => {
     const pollTasks = async () => {
@@ -36,6 +39,13 @@ export default function HomePage() {
   }, []);
 
   const active = connected || isListening;
+
+  const sendTestPrompt = () => {
+    const text = testPrompt.trim();
+    if (!text) return;
+    sendTextMessage(text);
+    setTestPrompt('');
+  };
 
   const handleVoice = async () => {
     if (connected) {
@@ -95,6 +105,25 @@ export default function HomePage() {
               {active ? 'Speak now' : error || 'Click the orb to start'}
             </p>
           </div>
+
+          {active && (
+            <div className="flex items-center gap-2 w-72">
+              <input
+                type="text"
+                value={testPrompt}
+                onChange={(e) => setTestPrompt(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') sendTestPrompt(); }}
+                placeholder="Type a test prompt (text → voice)…"
+                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+              />
+              <button
+                onClick={sendTestPrompt}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600/90 hover:bg-violet-500 text-white text-xs font-medium transition-all"
+              >
+                Send
+              </button>
+            </div>
+          )}
 
           {sttStatus === 'downloading' && (
             <div className="flex flex-col items-center gap-2 animate-in slide-in-from-top-2 fade-in duration-300">

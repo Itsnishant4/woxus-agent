@@ -15,9 +15,9 @@ export default function TitleBar() {
   const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 
   const controlBtn =
-    'w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground/70 hover:text-foreground hover:bg-accent/70 transition-colors';
+    'w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground/70 hover:text-foreground hover:bg-accent/70 transition-colors';
   const controlBtnClose =
-    'w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground/70 hover:text-white hover:bg-red-500/80 transition-colors';
+    'w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground/70 hover:text-white hover:bg-red-500/80 transition-colors';
 
   const min = (
     <button key="min" onClick={minimize} aria-label="Minimize" className={controlBtn}>
@@ -54,7 +54,7 @@ export default function TitleBar() {
 
   return (
     <div
-      className="relative h-8 shrink-0 flex items-center bg-background/85 backdrop-blur-sm border-b border-border/60 select-none"
+      className="relative h-12 shrink-0 flex items-center bg-background/85 backdrop-blur-sm border-b border-border/60 select-none"
       style={drag}
     >
       {isMac ? (

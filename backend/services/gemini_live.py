@@ -148,9 +148,12 @@ class GeminiLiveService:
         """Build history turns (user/model alternating, no leading model turns)."""
         turns = []
         for entry in self.conversation_log:
+            text = (entry.get("text") or "").strip()
+            if not text:
+                continue  # skip tool-call / empty log entries
             turns.append({
                 "role": entry["role"],
-                "parts": [{"text": entry["text"]}],
+                "parts": [{"text": text}],
             })
         while turns and turns[0]["role"] == "model":
             turns.pop(0)
@@ -311,7 +314,7 @@ class GeminiLiveService:
                                     turns=[
                                         types.Content(
                                             role=t["role"],
-                                            parts=[types.Part(text=t["text"])],
+                                            parts=[types.Part(text=t["parts"][0]["text"])],
                                         )
                                         for t in turns
                                     ],
@@ -525,7 +528,7 @@ class GeminiLiveService:
                             turns=[
                                 types.Content(
                                     role=t["role"],
-                                    parts=[types.Part(text=t["text"])],
+                                    parts=[types.Part(text=t["parts"][0]["text"])],
                                 )
                                 for t in turns
                             ],

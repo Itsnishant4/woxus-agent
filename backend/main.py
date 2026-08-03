@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import load_config
 from .middleware import license_check_middleware, trial_limiter_middleware
-from .routes import chat, feedback, license, memory, model, notes, overlay, settings, system, tasks, terminal, trial, voice
+from .routes import bugs, chat, feedback, license, memory, model, notes, overlay, settings, system, tasks, terminal, trial, voice
 
 
 @asynccontextmanager
@@ -72,6 +72,7 @@ app.add_middleware(
 app.middleware("http")(license_check_middleware)
 app.middleware("http")(trial_limiter_middleware)
 
+app.include_router(bugs.router, prefix="/api/bugs", tags=["bugs"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])

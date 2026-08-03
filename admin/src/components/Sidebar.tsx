@@ -10,6 +10,7 @@ const navItems = [
   { href: "/licenses", label: "Licenses", icon: "⚿" },
   { href: "/users", label: "Users", icon: "⊛" },
   { href: "/feedback", label: "Feedback", icon: "★" },
+  { href: "/bugs", label: "Bugs", icon: "🐞" },
   { href: "/purchases", label: "Purchases", icon: "$" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];

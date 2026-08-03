@@ -130,3 +130,10 @@ class FeedbackSubmit(BaseModel):
     rating: int
     text: str | None = None
     hardware_id: str | None = None
+
+class BugReportSubmit(BaseModel):
+    title: str
+    description: str | None = None
+    image: str | None = None  # base64 data URL (validated < 2 MB)
+    hardware_id: str | None = None
+    app_version: str | None = None

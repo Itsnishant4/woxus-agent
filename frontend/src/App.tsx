@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Settings, Brain, Key,
+  Settings, Brain, Key, Bug,
   PanelLeft, Zap, ListChecks, Keyboard, Mic,
   Download, CheckCircle2, RefreshCw,
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import LicensePage from '@pages/LicensePage';
 import PermissionGatePage from '@pages/PermissionGatePage';
 import Toaster from '@components/Toast';
 import ModelDownloadScreen from '@components/ModelDownloadScreen';
+import ReportBugModal from '@components/ReportBugModal';
 import { useTheme } from '@/hooks/useTheme';
 
 type AppStatus = 'loading' | 'unlicensed' | 'trial' | 'licensed';
@@ -118,6 +119,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [agentStatus] = useState<AgentStatus>('idle');
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [bugOpen, setBugOpen] = useState(false);
   const [permissionOk, setPermissionOk] = useState<boolean | null>(null);
   const [updateState, setUpdateState] = useState<any>(null);
   const navigate = useNavigate();
@@ -338,6 +340,22 @@ export default function App() {
               variant="ghost"
               size="sm"
               className="w-full justify-start gap-3 px-2.5 text-muted-foreground hover:text-foreground"
+              onClick={() => setBugOpen(true)}
+            >
+              <Bug className="h-4 w-4 shrink-0" />
+              {!collapsed && <span className="text-sm">Report Bug</span>}
+            </Button>
+            {collapsed && (
+              <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1.5 rounded-md bg-popover text-popover-foreground text-xs shadow-lg border border-border whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+                Report Bug
+              </div>
+            )}
+          </div>
+          <div className="group relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-3 px-2.5 text-muted-foreground hover:text-foreground"
               onClick={() => setCollapsed(!collapsed)}
             >
               <PanelLeft className="h-4 w-4 shrink-0" />
@@ -433,6 +451,7 @@ export default function App() {
       {/* Command Palette */}
       <CmdPalette open={cmdOpen} onOpenChange={setCmdOpen} />
       <Toaster />
+      {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)} />}
     </div>
   );
 }

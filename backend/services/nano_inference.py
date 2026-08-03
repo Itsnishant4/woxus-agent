@@ -103,6 +103,19 @@ def _load_model():
         return _llm
 
 
+def warm_up() -> bool:
+    """Pre-load the model into memory at startup so the first delegation is
+    instant. No-op if the weights aren't downloaded yet; returns True when the
+    model is resident. The model stays cached (see _load_model singleton)."""
+    if not is_model_ready():
+        return False
+    try:
+        return _load_model() is not None
+    except Exception as e:
+        logger.warning("🤖 [NANOAGENT] Warm-up failed: %s", e)
+        return False
+
+
 def _extract_json(text: str) -> dict | None:
     """Extract the first JSON object from model output. None if none found."""
     text = text.strip()

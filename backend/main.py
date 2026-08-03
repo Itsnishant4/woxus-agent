@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -25,8 +26,33 @@ async def lifespan(app: FastAPI):
         force=True,
     )
     logging.info("Woxus backend starting…")
+    # Pre-load the local mini-agent model in the background so the first
+    # delegated task doesn't pay the ~3s model load. Polls until the model
+    # file is downloaded (the frontend's model gate), then loads it once into
+    # memory where it stays resident (nano_inference caches it as a singleton).
+    asyncio.create_task(_preload_mini_agent_model())
     yield
     logging.info("Woxus backend shutting down.")
+
+
+async def _preload_mini_agent_model():
+    """Load the SmolLM3 mini-agent model at startup and keep it resident."""
+    from .services.nano_inference import warm_up
+
+    for _ in range(60):  # up to ~5 minutes for the model download to finish
+        try:
+            ok = await asyncio.to_thread(warm_up)
+            if ok:
+                logging.getLogger("backend.services.nano_inference").info(
+                    "🤖 [NANOAGENT] Mini-agent model pre-loaded and resident"
+                )
+                return
+        except Exception as e:
+            logging.getLogger("backend").warning("🤖 [NANOAGENT] Warm-up error: %s", e)
+        await asyncio.sleep(5)
+    logging.getLogger("backend").warning(
+        "🤖 [NANOAGENT] Mini-agent model not ready after startup wait"
+    )
 
 
 app = FastAPI(

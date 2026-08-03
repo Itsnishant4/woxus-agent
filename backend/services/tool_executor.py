@@ -45,7 +45,7 @@ _ENGLISH_WORDS = {
     "and", "the", "to", "a", "for", "of", "me", "please", "i", "you",
     "in", "on", "this", "that", "open", "read", "make", "create", "write",
     "find", "check", "list", "show", "tell", "my", "your", "from", "with",
-    "new", "then", "is", "are", "it", "me", "can", "will", "do", "we",
+    "new", "then", "is", "are", "it", "can", "will", "do", "we",
 }
 
 

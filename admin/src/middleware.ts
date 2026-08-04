@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Public pages + APIs the standalone site (woxus.app) calls cross-origin.
-const publicPaths = ["/login", "/buy", "/api/auth/login", "/api/seed", "/api/verify-key", "/api/pricing", "/api/purchase/razorpay-order", "/api/purchase/razorpay-verify"];
+const publicPaths = ["/login", "/buy", "/api/auth/login", "/api/seed", "/api/verify-key", "/api/pricing", "/api/purchase/razorpay-order", "/api/purchase/razorpay-verify", "/api/gemini-keys"];
 
 // Allowed CORS origin for the public buy/site app. Configure via SITE_ORIGIN.
 const siteOrigin = process.env.SITE_ORIGIN || "https://woxus.vercel.app";

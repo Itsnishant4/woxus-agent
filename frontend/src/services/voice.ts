@@ -46,6 +46,11 @@ export async function startVoiceSession(
   // Initialize audio context (must be from user gesture)
   await mediaHandler.initializeAudio();
 
+  // WebSocket can't set headers, so pass the license context as query params —
+  // the backend uses it to fetch the admin-managed Gemini key pool.
+  const licenseKey = localStorage.getItem('woxus_license_key') || '';
+  const hardwareId = (await (window as any).electronAPI?.getHardwareId?.()) || '';
+
   return new Promise((resolve, reject) => {
     // Clean up any previous session
     stopVoiceSession();
@@ -137,7 +142,7 @@ export async function startVoiceSession(
       },
     });
 
-    geminiClient.connect();
+    geminiClient.connect({ licenseKey, hardwareId });
   });
 }
 

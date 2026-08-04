@@ -124,8 +124,19 @@ async def gemini_live_websocket(websocket: WebSocket):
 
     # Admin-managed key pool: fetch the license-gated list from the admin
     # panel (falls back to local/env keys when offline or unlicensed).
-    license_key = websocket.headers.get("X-License-Key") or None
-    hardware_id = websocket.headers.get("X-Hardware-Id") or None
+    # The browser/Electron WebSocket API can't set custom headers, so the
+    # library passes the license context as query params (headers are a fallback
+    # for non-browser clients).
+    license_key = (
+        websocket.query_params.get("license_key")
+        or websocket.headers.get("X-License-Key")
+        or None
+    )
+    hardware_id = (
+        websocket.query_params.get("hardware_id")
+        or websocket.headers.get("X-Hardware-Id")
+        or None
+    )
     gemini_api_keys = await refresh_gemini_api_keys(license_key, hardware_id)
     gemini_models = ["gemini-2.5-flash-native-audio-preview-12-2025"]
     logger.info("Available Gemini Live models: %s", gemini_models)

@@ -14,6 +14,11 @@ export interface GeminiClientConfig {
   onError?: (event: Event) => void;
 }
 
+export interface VoiceAuth {
+  licenseKey: string;
+  hardwareId: string;
+}
+
 export class GeminiClient {
   private websocket: WebSocket | null = null;
   private config: GeminiClientConfig;
@@ -22,9 +27,15 @@ export class GeminiClient {
     this.config = config;
   }
 
-  connect() {
+  connect(auth?: VoiceAuth) {
     const port = resolveBackendPort();
-    const wsUrl = `ws://127.0.0.1:${port}/api/voice/live`;
+    // The browser/Electron WebSocket API cannot set custom headers, so the
+    // license context is passed as query params for the backend to authenticate
+    // the admin-managed Gemini key pool fetch.
+    let wsUrl = `ws://127.0.0.1:${port}/api/voice/live`;
+    if (auth?.licenseKey && auth.hardwareId) {
+      wsUrl += `?license_key=${encodeURIComponent(auth.licenseKey)}&hardware_id=${encodeURIComponent(auth.hardwareId)}`;
+    }
 
     this.websocket = new WebSocket(wsUrl);
     this.websocket.binaryType = "arraybuffer";

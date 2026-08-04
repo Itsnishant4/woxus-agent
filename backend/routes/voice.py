@@ -10,7 +10,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from ..config import get_api_keys
+from ..services.gemini_keys import refresh_gemini_api_keys
 from ..services.gemini_live import GeminiLiveService
 from ..services.memory_engine import list_memories
 from ..services.tool_definitions import agent_tools
@@ -122,10 +122,11 @@ async def gemini_live_websocket(websocket: WebSocket):
         except Exception:
             logger.debug("Failed to send tool result")
 
-    config = websocket.app.state.config
-    gemini_api_keys = get_api_keys()
-    if all(k == "YOUR_GEMINI_API_KEY" for k in gemini_api_keys):
-        gemini_api_keys = [config.get("GEMINI_API_KEY", "") or "YOUR_GEMINI_API_KEY"]
+    # Admin-managed key pool: fetch the license-gated list from the admin
+    # panel (falls back to local/env keys when offline or unlicensed).
+    license_key = websocket.headers.get("X-License-Key") or None
+    hardware_id = websocket.headers.get("X-Hardware-Id") or None
+    gemini_api_keys = await refresh_gemini_api_keys(license_key, hardware_id)
     gemini_models = ["gemini-2.5-flash-native-audio-preview-12-2025"]
     logger.info("Available Gemini Live models: %s", gemini_models)
 

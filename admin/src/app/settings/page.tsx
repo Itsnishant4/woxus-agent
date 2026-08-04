@@ -20,12 +20,40 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // Admin-managed Gemini key pool (one per line).
+  const [geminiKeys, setGeminiKeys] = useState("");
+  const [savingKeys, setSavingKeys] = useState(false);
+  const [keysMsg, setKeysMsg] = useState("");
+
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => setSettings(d.settings))
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    fetch("/api/gemini-keys")
+      .then((r) => (r.ok ? r.json() : { keys: [] }))
+      .then((d) => setGeminiKeys((d.keys || []).join("\n")))
+      .catch(() => setGeminiKeys(""));
+  }, []);
+
+  const saveKeys = async () => {
+    setSavingKeys(true);
+    setKeysMsg("");
+    const keys = geminiKeys
+      .split("\n")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const res = await fetch("/api/gemini-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys }),
+    });
+    setKeysMsg(res.ok ? `Saved ${keys.length} key(s)` : "Failed to save keys");
+    setSavingKeys(false);
+  };
 
   const update = (key: keyof Settings, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -73,6 +101,28 @@ export default function SettingsPage() {
           <Field label="Monthly price" value={settings.price_monthly} onChange={(v) => update("price_monthly", v)} hint="e.g. 9.99" />
           <Field label="Yearly price" value={settings.price_yearly} onChange={(v) => update("price_yearly", v)} hint="e.g. 99.99" />
           <Field label="Currency" value={settings.currency} onChange={(v) => update("currency", v)} hint="e.g. INR, USD" />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-sm max-w-lg">
+        <CardHeader><CardTitle className="text-sm">Gemini API Keys</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <label className="block text-xs text-muted-foreground mb-1">
+            One key per line (rotation pool — add/remove as many as you want)
+          </label>
+          <textarea
+            value={geminiKeys}
+            onChange={(e) => setGeminiKeys(e.target.value)}
+            rows={6}
+            placeholder={"AIza...\nAIza...\n…"}
+            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+          />
+          <div className="flex items-center gap-3">
+            <Button variant="primary" size="sm" onPress={saveKeys} isDisabled={savingKeys}>
+              {savingKeys ? "Saving..." : "Save Keys"}
+            </Button>
+            {keysMsg && <p className={`text-sm ${keysMsg.startsWith("Saved") ? "text-green-500" : "text-red-500"}`}>{keysMsg}</p>}
+          </div>
         </CardContent>
       </Card>
 

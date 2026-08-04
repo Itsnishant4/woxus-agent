@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, Switch, Separator } from '@heroui/react';
-import { Palette, Bell, Shield, Info, Monitor, Download, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { Palette, Bell, Shield, Info, Monitor, Download, Loader2, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
 function AppearanceSection() {
@@ -108,6 +108,7 @@ function UpdateSection() {
   const [version, setVersion] = useState('');
   const [newVersion, setNewVersion] = useState('');
   const [error, setError] = useState('');
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     // @ts-ignore
@@ -123,6 +124,9 @@ function UpdateSection() {
         if (state.percent != null) setPercent(state.percent);
         if (state.version) setNewVersion(state.version);
         if (state.error) setError(state.error);
+        if (state.status === 'available' || state.status === 'idle' || state.status === 'none') {
+          setStarting(false);
+        }
       });
       return unsubscribe;
     }
@@ -143,8 +147,12 @@ function UpdateSection() {
           disabled={status === 'checking' || status === 'downloading'}
           className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
-          <RefreshCw className={`h-4 w-4 ${status === 'checking' ? 'animate-spin' : ''}`} />
-          Check for Updates
+          {status === 'checking' ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {status === 'checking' ? 'Checking…' : 'Check for Updates'}
         </button>
       </div>
 
@@ -152,10 +160,12 @@ function UpdateSection() {
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-violet-600">Update v{newVersion} available</p>
           <button
-            onClick={() => api?.downloadUpdate()}
-            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all flex items-center gap-2"
+            onClick={() => { setStarting(true); api?.downloadUpdate(); }}
+            disabled={starting}
+            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all flex items-center gap-2 disabled:opacity-60"
           >
-            <Download className="h-4 w-4" /> Download
+            {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {starting ? 'Downloading…' : 'Download'}
           </button>
         </div>
       )}

@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   Settings, Brain, Key, Bug,
   PanelLeft, Zap, ListChecks, Keyboard, Mic,
-  Download, CheckCircle2, RefreshCw,
+  Download, CheckCircle2, Loader2,
 } from 'lucide-react';
 import { Button, Separator } from '@heroui/react';
 import { API_BASE } from '@/services/api';
@@ -400,7 +400,7 @@ export default function App() {
         {updateState?.status === 'downloading' && (
           <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-violet-600 text-white text-sm">
             <p className="flex items-center gap-2 font-medium">
-              <RefreshCw className="h-4 w-4 animate-spin" /> Downloading v{updateState.version}… {updateState.percent}%
+              <Loader2 className="h-4 w-4 animate-spin" /> Downloading v{updateState.version}… {updateState.percent}%
             </p>
             <div className="w-40 h-2 rounded-full bg-white/30 overflow-hidden shrink-0">
               <div className="h-full bg-white transition-all" style={{ width: `${updateState.percent || 0}%` }} />

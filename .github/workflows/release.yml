@@ -81,4 +81,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run electron:release -- ${{ matrix.electron-args }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Cross-repo PAT: GITHUB_TOKEN is scoped to woxus-agent only, but the
+          # publish config targets the public woxus-releases repo (updater feed).
+          # RELEASE_TOKEN must have write access to woxus-releases.
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}

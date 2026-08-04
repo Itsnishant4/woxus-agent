@@ -1,9 +1,13 @@
 appId: com.woxus.app
 productName: Woxus
 publish:
+  # Dedicated PUBLIC releases repo (woxus-agent stays private — the updater
+  # reads this feed unauthenticated at runtime, so the source repo must not
+  # be the update target). electron-builder uploads artifacts + latest.yml /
+  # latest-mac.yml here; the GH_TOKEN below is the PAT used by CI to write.
   provider: github
   owner: Itsnishant4
-  repo: woxus-agent
+  repo: woxus-releases
   # No explicit token: electron-builder's GitHub provider auto-reads
   # GH_TOKEN / GITHUB_TOKEN from the environment (set in CI). This lets
   # local `electron:package` (--publish never) build without a token.

@@ -6,6 +6,7 @@ Supports both casual conversation and structured tool-call output.
 
 import json
 import logging
+import time
 import os
 import re
 import threading
@@ -62,6 +63,12 @@ MIN_VALID_SIZE = 10 * 1024 * 1024
 
 _llm = None
 _lock = threading.Lock()
+# Back off after a failed model load — on Windows the bundled llama.cpp
+# can hard-crash (STATUS_ILLEGAL_INSTRUCTION 0xc000001d, CPU-incompatible
+# wheel), which will not self-heal. Avoid retrying every few seconds and
+# spamming the log.
+_last_load_failed = 0.0
+LOAD_RETRY_BACKOFF = 300  # seconds between attempts after a failure
 
 
 def is_model_ready() -> bool:
@@ -72,12 +79,14 @@ def is_model_ready() -> bool:
 
 def _load_model():
     """Lazily load the GGUF model via llama.cpp (thread-safe)."""
-    global _llm
+    global _llm, _last_load_failed
     if _llm is not None:
         return _llm
     with _lock:
         if _llm is not None:
             return _llm
+        if time.monotonic() - _last_load_failed < LOAD_RETRY_BACKOFF:
+            return None  # recent hard failure — back off
 
         model_path = _model_file_for(detect_hardware())
         if not os.path.exists(model_path) or os.path.getsize(model_path) <= MIN_VALID_SIZE:
@@ -97,6 +106,7 @@ def _load_model():
             logger.info("🤖 [NANOAGENT] Model loaded from %s", model_path)
         except Exception as e:
             logger.error("🤖 [NANOAGENT] Failed to load model: %s", e)
+            _last_load_failed = time.monotonic()
             return None
         return _llm
 

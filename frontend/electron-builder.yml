@@ -8,6 +8,12 @@ publish:
   provider: github
   owner: Itsnishant4
   repo: woxus-releases
+  # Publish as a real (non-draft) release: electron-updater ignores drafts, and
+  # electron-builder's by-tag merge only finds published releases — so without
+  # this, the mac and windows matrix jobs create two separate invisible drafts
+  # and the updater never sees an update. releaseType: release makes the first
+  # job publish and lets later jobs merge all platforms into one release.
+  releaseType: release
   # No explicit token: electron-builder's GitHub provider auto-reads
   # GH_TOKEN / GITHUB_TOKEN from the environment (set in CI). This lets
   # local `electron:package` (--publish never) build without a token.

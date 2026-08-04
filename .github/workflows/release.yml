@@ -23,19 +23,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Current host is an Intel (x64) Mac. Add the arm64 MacBook + Windows
-          # PC as self-hosted runners and uncomment those entries to build them.
           - name: macos-x64
-            os: macos
+            arch: X64
             artifact: backend-dist-macos-x64
-          # - name: macos-arm64
-          #   os: macos
-          #   artifact: backend-dist-macos-arm64
+          - name: macos-arm64
+            arch: ARM64
+            artifact: backend-dist-macos-arm64
           # - name: windows
-          #   os: windows
+          #   arch: WINDOWS
           #   artifact: backend-dist-windows
-    # GitHub's default labels for a macOS x64 self-hosted runner — no custom labels needed.
-    runs-on: [self-hosted, macOS, X64]
+    runs-on: [self-hosted, macOS, ${{ matrix.arch }}]
     defaults:
       run:
         working-directory: backend
@@ -67,19 +64,18 @@ jobs:
       matrix:
         include:
           - name: macos-x64
-            os: macos
+            arch: X64
             artifact: backend-dist-macos-x64
             electron-args: --mac --x64
-          # - name: macos-arm64
-          #   os: macos
-          #   artifact: backend-dist-macos-arm64
-          #   electron-args: --mac --arm64
+          - name: macos-arm64
+            arch: ARM64
+            artifact: backend-dist-macos-arm64
+            electron-args: --mac --arm64
           # - name: windows
-          #   os: windows
+          #   arch: WINDOWS
           #   artifact: backend-dist-windows
           #   electron-args: --win       # builds x64 + ia32 from electron-builder.yml
-    # GitHub's default labels for a macOS x64 self-hosted runner — no custom labels needed.
-    runs-on: [self-hosted, macOS, X64]
+    runs-on: [self-hosted, macOS, ${{ matrix.arch }}]
     defaults:
       run:
         working-directory: frontend

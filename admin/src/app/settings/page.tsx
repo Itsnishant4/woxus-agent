@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, Button } from "@heroui/react";
+import { PageLoader, Spinner } from "@/components/ui";
 
 interface Settings {
   trial_duration_seconds: string;
@@ -19,6 +20,7 @@ export default function SettingsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(true);
 
   // Admin-managed Gemini key pool (one per line).
   const [geminiKeys, setGeminiKeys] = useState("");
@@ -29,7 +31,8 @@ export default function SettingsPage() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => setSettings(d.settings))
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -81,6 +84,15 @@ export default function SettingsPage() {
     setSaving(false);
   };
 
+  if (loading) {
+    return (
+      <div className="p-6">
+        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+        <PageLoader label="Loading settings…" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -119,7 +131,8 @@ export default function SettingsPage() {
           />
           <div className="flex items-center gap-3">
             <Button variant="primary" size="sm" onPress={saveKeys} isDisabled={savingKeys}>
-              {savingKeys ? "Saving..." : "Save Keys"}
+              {savingKeys && <Spinner className="h-3.5 w-3.5" />}
+              {savingKeys ? "Saving…" : "Save Keys"}
             </Button>
             {keysMsg && <p className={`text-sm ${keysMsg.startsWith("Saved") ? "text-green-500" : "text-red-500"}`}>{keysMsg}</p>}
           </div>
@@ -128,7 +141,8 @@ export default function SettingsPage() {
 
       <div className="max-w-lg flex items-center gap-3">
         <Button variant="primary" size="sm" onPress={save} isDisabled={saving}>
-          {saving ? "Saving..." : "Save All"}
+          {saving && <Spinner className="h-3.5 w-3.5" />}
+          {saving ? "Saving…" : "Save All"}
         </Button>
         {msg && <p className={`text-sm ${msg === "Saved successfully" ? "text-green-500" : "text-red-500"}`}>{msg}</p>}
       </div>

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@heroui/react";
+import { TableSkeleton, EmptyState } from "@/components/ui";
+import { IconCreditCard } from "@/components/icons";
 
 interface Purchase {
   _id: string;
@@ -18,12 +20,14 @@ interface Purchase {
 
 export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/purchase")
       .then((r) => r.json())
       .then((d) => setPurchases(d.purchases))
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   const statusColor: Record<string, string> = {
@@ -42,6 +46,9 @@ export default function PurchasesPage() {
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="p-0 overflow-x-auto">
+          {loading ? (
+            <TableSkeleton rows={6} cols={6} />
+          ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -54,9 +61,6 @@ export default function PurchasesPage() {
               </tr>
             </thead>
             <tbody>
-              {purchases.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">No purchases yet</td></tr>
-              )}
               {purchases.map((p) => (
                 <tr key={p._id} className="border-b border-border/50 hover:bg-accent/30">
                   <td className="px-4 py-3 text-xs">{p.email}</td>
@@ -73,6 +77,10 @@ export default function PurchasesPage() {
               ))}
             </tbody>
           </table>
+          )}
+          {!loading && purchases.length === 0 && (
+            <EmptyState icon={<IconCreditCard />} title="No purchases yet" sub="Completed transactions will appear here." />
+          )}
         </CardContent>
       </Card>
     </div>

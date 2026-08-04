@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@heroui/react";
+import { TableSkeleton, Spinner } from "@/components/ui";
 
 interface FeedbackItem {
   _id: string;
@@ -18,6 +19,7 @@ export default function FeedbackPage() {
   const [distribution, setDistribution] = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [page, setPage] = useState(1);
   const [minRating, setMinRating] = useState("0");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const params = new URLSearchParams({ page: String(page), limit: "20" });
@@ -30,7 +32,8 @@ export default function FeedbackPage() {
         setAvgRating(data.avgRating);
         setDistribution(data.distribution);
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [page, minRating]);
 
   const pages = Math.ceil(total / 20);
@@ -47,7 +50,7 @@ export default function FeedbackPage() {
       <div className="grid grid-cols-5 gap-2">
         {[1, 2, 3, 4, 5].map((r) => (
           <Card key={r} className={`border-border/60 shadow-sm ${minRating === String(r) ? "ring-2 ring-violet-500" : ""}`}>
-            <CardContent className="py-3 text-center cursor-pointer" onClick={() => setMinRating(minRating === String(r) ? "0" : String(r))}>
+            <CardContent className="py-3 text-center cursor-pointer" onClick={() => { setLoading(true); setMinRating(minRating === String(r) ? "0" : String(r)); }}>
               <p className="text-lg">{stars(r)}</p>
               <p className="text-xs text-muted-foreground mt-1">{distribution[r] || 0}</p>
             </CardContent>
@@ -57,6 +60,9 @@ export default function FeedbackPage() {
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="p-0 overflow-x-auto">
+          {loading ? (
+            <TableSkeleton rows={6} cols={4} />
+          ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -80,14 +86,18 @@ export default function FeedbackPage() {
               ))}
             </tbody>
           </table>
+          )}
         </CardContent>
       </Card>
 
       {pages > 1 && (
         <div className="flex gap-2 items-center text-sm text-muted-foreground">
-          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40">Prev</button>
-          <span>Page {page} of {pages}</span>
-          <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40">Next</button>
+          <button disabled={page <= 1} onClick={() => { setLoading(true); setPage((p) => p - 1); }} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40">Prev</button>
+          <span className="flex items-center gap-2">
+            Page {page} of {pages}
+            {loading && <Spinner className="h-3 w-3" />}
+          </span>
+          <button disabled={page >= pages} onClick={() => { setLoading(true); setPage((p) => p + 1); }} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40">Next</button>
         </div>
       )}
     </div>

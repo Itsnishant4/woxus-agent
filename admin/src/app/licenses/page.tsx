@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, Button } from "@heroui/react";
+import { TableSkeleton, Spinner } from "@/components/ui";
 
 interface License {
   _id: string;
@@ -21,36 +22,52 @@ export default function LicensesPage() {
   const [q, setQ] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
   const [genExpiry, setGenExpiry] = useState("365");
-  const [genMaxAct, setGenMaxAct] = useState("1");
- 
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
   const fetchLicenses = useCallback(async () => {
-    const params = new URLSearchParams({ page: String(page), limit: "20" });
-    if (q) params.set("q", q);
-    const res = await fetch(`/api/licenses?${params}`);
-    const data = await res.json();
-    setLicenses(data.licenses);
-    setTotal(data.total);
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (q) params.set("q", q);
+      const res = await fetch(`/api/licenses?${params}`);
+      const data = await res.json();
+      setLicenses(data.licenses);
+      setTotal(data.total);
+    } finally {
+      setLoading(false);
+    }
   }, [page, q]);
 
   useEffect(() => { fetchLicenses(); }, [fetchLicenses]);
 
   const generate = async () => {
-    await fetch("/api/licenses/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expiryDays: parseInt(genExpiry), maxActivations: 1 }),
-    });
-    setShowGenerate(false);
-    fetchLicenses();
+    setGenerating(true);
+    try {
+      await fetch("/api/licenses/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiryDays: parseInt(genExpiry), maxActivations: 1 }),
+      });
+      setShowGenerate(false);
+      await fetchLicenses();
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const toggleRevoke = async (key: string, revoked: boolean) => {
-    await fetch("/api/licenses/revoke", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, revoked: !revoked }),
-    });
-    fetchLicenses();
+    setBusyKey(key);
+    try {
+      await fetch("/api/licenses/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, revoked: !revoked }),
+      });
+      await fetchLicenses();
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   const pages = Math.ceil(total / 20);
@@ -66,11 +83,14 @@ export default function LicensesPage() {
       </div>
 
       <div className="flex gap-2">
-        <input placeholder="Search by key or hardware ID..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="w-full max-w-sm px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+        <input placeholder="Search by key or hardware ID..." value={q} onChange={(e) => { setLoading(true); setQ(e.target.value); setPage(1); }} className="w-full max-w-sm px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
       </div>
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="p-0 overflow-x-auto">
+          {loading ? (
+            <TableSkeleton rows={6} cols={5} />
+          ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -100,12 +120,14 @@ export default function LicensesPage() {
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleRevoke(l.key, l.revoked)}
-                      className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                      disabled={busyKey === l.key}
+                      className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                         l.revoked
                           ? "bg-green-500/10 text-green-500 hover:bg-green-500/20"
                           : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
                       }`}
                     >
+                      {busyKey === l.key ? <Spinner className="h-3 w-3" /> : null}
                       {l.revoked ? "Reactivate" : "Revoke"}
                     </button>
                   </td>
@@ -113,14 +135,18 @@ export default function LicensesPage() {
               ))}
             </tbody>
           </table>
+          )}
         </CardContent>
       </Card>
 
       {pages > 1 && (
         <div className="flex gap-2 items-center text-sm text-muted-foreground">
-          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40 transition-colors">Prev</button>
-          <span>Page {page} of {pages}</span>
-          <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40 transition-colors">Next</button>
+          <button disabled={page <= 1} onClick={() => { setLoading(true); setPage((p) => p - 1); }} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40 transition-colors">Prev</button>
+          <span className="flex items-center gap-2">
+            Page {page} of {pages}
+            {loading && <Spinner className="h-3 w-3" />}
+          </span>
+          <button disabled={page >= pages} onClick={() => { setLoading(true); setPage((p) => p + 1); }} className="px-3 py-1 rounded-md bg-accent/50 hover:bg-accent disabled:opacity-40 transition-colors">Next</button>
         </div>
       )}
 
@@ -137,8 +163,11 @@ export default function LicensesPage() {
               <input type="number" value="1" disabled readOnly className="w-full px-3 py-2 rounded-lg bg-muted border border-border text-sm opacity-70 cursor-not-allowed" />
             </div>
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onPress={() => setShowGenerate(false)}>Cancel</Button>
-              <Button variant="primary" onPress={generate}>Generate</Button>
+              <Button variant="ghost" onPress={() => setShowGenerate(false)} isDisabled={generating}>Cancel</Button>
+              <Button variant="primary" onPress={generate} isDisabled={generating}>
+                {generating && <Spinner className="h-3.5 w-3.5" />}
+                {generating ? "Generating…" : "Generate"}
+              </Button>
             </div>
           </div>
         </div>

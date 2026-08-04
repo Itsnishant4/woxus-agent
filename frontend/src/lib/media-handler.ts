@@ -20,17 +20,11 @@ export class MediaHandler {
   private videoCanvas = document.createElement("canvas");
   private canvasCtx = this.videoCanvas.getContext("2d")!;
 
-  // Mic ducking — while the model's reply is playing, its own voice hits the
-  // mic, so we drop audio during playback to avoid Gemini hearing itself.
-  // Otherwise we stream continuously (the reference app does the same) and let
-  // Gemini's server-side VAD + TURN_INCLUDES_ONLY_ACTIVITY decide turn bounds.
-  // The previous silence gate (cut mic after 800ms quiet) starved Gemini of
-  // audio so it never recognized speech — that's why responses never came.
-  private modelSpeaking = false;
-
+  // Always send the mic so the user can barge in / interrupt the model while
+  // it is speaking. Gemini Live handles echo cancellation and turn-taking, so
+  // ducking the mic here would silently drop the user's voice.
   private shouldSendAudio() {
-    // While the model's reply is playing, drop audio (mic ducking only).
-    return !this.modelSpeaking;
+    return true;
   }
 
   async initializeAudio() {
@@ -131,7 +125,6 @@ export class MediaHandler {
 
   stopAudio() {
     this.isRecording = false;
-    this.modelSpeaking = false;
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach((t) => t.stop());
       this.mediaStream = null;
@@ -242,15 +235,10 @@ export class MediaHandler {
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;
 
-    // Duck mic while this reply plays so Gemini doesn't hear its own voice.
-    this.modelSpeaking = true;
     this.scheduledSources.push(source);
     source.onended = () => {
       const idx = this.scheduledSources.indexOf(source);
       if (idx > -1) this.scheduledSources.splice(idx, 1);
-      if (this.scheduledSources.length === 0) {
-        this.modelSpeaking = false;
-      }
     };
   }
 
@@ -262,7 +250,6 @@ export class MediaHandler {
       } catch (_) {}
     });
     this.scheduledSources = [];
-    this.modelSpeaking = false;
     if (this.audioContext) {
       this.nextStartTime = this.audioContext.currentTime;
     }

@@ -53,3 +53,6 @@ release/
 venv/
 yarn-debug.log*
 yarn-error.log*
+
+# self-hosted GitHub Actions runner
+actions-runner/

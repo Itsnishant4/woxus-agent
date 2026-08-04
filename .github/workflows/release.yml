@@ -34,7 +34,8 @@ jobs:
           # - name: windows
           #   os: windows
           #   artifact: backend-dist-windows
-    runs-on: [self-hosted, ${{ matrix.os }}]
+    # GitHub's default labels for a macOS x64 self-hosted runner — no custom labels needed.
+    runs-on: [self-hosted, macOS, X64]
     defaults:
       run:
         working-directory: backend
@@ -79,7 +80,8 @@ jobs:
           #   os: windows
           #   artifact: backend-dist-windows
           #   electron-args: --win       # builds x64 + ia32 from electron-builder.yml
-    runs-on: [self-hosted, ${{ matrix.os }}]
+    # GitHub's default labels for a macOS x64 self-hosted runner — no custom labels needed.
+    runs-on: [self-hosted, macOS, X64]
     defaults:
       run:
         working-directory: frontend

@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Auto-update (manual flow: user clicks Download, then Restart & Install)
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
-  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  downloadUpdate: (version: string) => ipcRenderer.invoke('update:download', version),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateStatus: (callback: (state: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);

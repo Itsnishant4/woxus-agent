@@ -124,7 +124,13 @@ function UpdateSection() {
         if (state.percent != null) setPercent(state.percent);
         if (state.version) setNewVersion(state.version);
         if (state.error) setError(state.error);
-        if (state.status === 'available' || state.status === 'idle' || state.status === 'none') {
+        if (
+          state.status === 'available' ||
+          state.status === 'idle' ||
+          state.status === 'none' ||
+          state.status === 'downloaded' ||
+          state.status === 'mac-dmg-ready'
+        ) {
           setStarting(false);
         }
       });
@@ -156,7 +162,7 @@ function UpdateSection() {
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-violet-600">Update v{newVersion} available</p>
           <button
-            onClick={() => { setStarting(true); api?.downloadUpdate(); }}
+            onClick={() => { setStarting(true); api?.downloadUpdate(newVersion); }}
             disabled={starting}
             className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 transition-all flex items-center gap-2 disabled:opacity-60"
           >
@@ -186,6 +192,18 @@ function UpdateSection() {
           >
             <Download className="h-4 w-4" /> Restart &amp; Update
           </button>
+        </div>
+      )}
+
+      {status === 'mac-dmg-ready' && (
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4 space-y-1.5">
+          <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" /> v{newVersion} downloaded — installer opened
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            <b>Quit Woxus</b>, then in the installer window drag <b>Woxus.app</b> onto the{' '}
+            <b>Applications</b> folder and click <b>Replace</b>. Then relaunch Woxus.
+          </p>
         </div>
       )}
 

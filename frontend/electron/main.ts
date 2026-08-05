@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
 import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
-import { initAutoUpdater, checkForUpdates, downloadUpdate, installUpdate, UpdateStatus } from './updaterService.js';
+import { initAutoUpdater, checkForUpdates, downloadUpdate, downloadMacDmg, installUpdate, UpdateStatus } from './updaterService.js';
 import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
 import { checkPermission, openPermissionSettings } from './permissionService.js';
 
@@ -350,8 +350,11 @@ ipcMain.handle('update:check', () => {
   return true;
 });
 
-ipcMain.handle('update:download', () => {
-  downloadUpdate();
+ipcMain.handle('update:download', (_event, version: string) => {
+  // macOS uses the DMG drag-to-Applications flow (Squirrel.Mac can't validate
+  // ad-hoc signatures); Windows keeps the silent NSIS updater.
+  if (process.platform === 'darwin') downloadMacDmg(version);
+  else downloadUpdate();
   return true;
 });
 

@@ -388,7 +388,7 @@ export default function App() {
             <button
               onClick={() => {
                 // @ts-ignore
-                window.electronAPI?.downloadUpdate?.();
+                window.electronAPI?.downloadUpdate?.(updateState.version);
               }}
               className="px-3 py-1 rounded-md bg-white text-violet-700 font-semibold hover:bg-violet-50 transition-colors shrink-0"
             >
@@ -422,6 +422,17 @@ export default function App() {
             >
               Restart &amp; Update
             </button>
+          </div>
+        )}
+
+        {updateState?.status === 'mac-dmg-ready' && (
+          <div className="flex items-center justify-between gap-3 px-5 py-2.5 bg-violet-600 text-white text-sm">
+            <p className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="h-4 w-4" /> v{updateState.version} downloaded — installer opened
+            </p>
+            <span className="text-xs text-white/80 shrink-0 max-w-[280px] text-right leading-snug">
+              Quit Woxus, then drag <b>Woxus.app</b> onto Applications &amp; click <b>Replace</b>.
+            </span>
           </div>
         )}
 

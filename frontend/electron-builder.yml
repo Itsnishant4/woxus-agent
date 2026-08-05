@@ -38,14 +38,14 @@ extraResources:
       - "**/*"
 mac:
   icon: ../icons/macos/icon.icns
-  # Intentionally NO macOS signing (no Apple Developer Program). An ad-hoc
-  # signature (`identity: "-"`) adds a unique per-build code-signature
-  # requirement that Squirrel.Mac enforces on auto-update — so 0.1.4→0.1.5→0.1.6
-  # all failed "code failed to satisfy specified code requirement(s)". Leaving
-  # the app unsigned (like the working Ayuvita reference) means there is no
-  # signature requirement for Squirrel.Mac to check, so auto-update passes.
-  # Users right-click → Open on first install. To get real auto-update + coding
-  # signing together, adopt an Apple Developer ID certificate later.
+  # Ad-hoc code signing (free, no Apple Developer Program). This lets the app
+  # launch and gives Gatekeeper an "Open Anyway" option in System Settings →
+  # Privacy & Security (unsigned builds on current macOS show "damaged" with no
+  # bypass). We do NOT use Squirrel.Mac's silent in-place install on macOS
+  # (ad-hoc signatures make its validation fail) — instead the in-app update
+  # downloads the .dmg and opens it so the user drags-to-Applications to
+  # Replace. Windows keeps silent NSIS updates.
+  identity: "-"
   # Skip deep-signing the bundled PyInstaller backend. macOS codesign rejects
   # PyInstaller's Python.framework with "bundle format is ambiguous (could be
   # app or framework)". The backend is launched as a child process and needs

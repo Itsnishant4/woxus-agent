@@ -1,5 +1,9 @@
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import { createRequire } from 'module';
+import https from 'node:https';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { IncomingMessage } from 'node:http';
 import type { UpdateInfo, ProgressInfo } from 'electron-updater';
 
 // electron-updater is CommonJS. Loading it via createRequire guarantees we get
@@ -20,10 +24,14 @@ export type UpdateStatus =
   | { status: 'available'; version: string }
   | { status: 'downloading'; percent: number }
   | { status: 'downloaded'; version: string }
+  | { status: 'mac-dmg-ready'; version: string }
   | { status: 'none' }
   | { status: 'error'; error: string };
 
 type StatusSink = (state: UpdateStatus) => void;
+
+// The DMG download flow (macOS) emits progress through the same sink.
+let _sink: StatusSink | null = null;
 
 // A 404 on GitHub's release feed means no release has been published yet
 // (private repo). Treat it as "no update available" instead of an error.
@@ -36,6 +44,7 @@ let initialized = false;
 export function initAutoUpdater(sink: StatusSink): void {
   if (initialized) return;
   initialized = true;
+  _sink = sink;
 
   const devUpdate = process.argv.includes('--update-dev');
   if (!app.isPackaged && !devUpdate) {
@@ -117,4 +126,69 @@ export async function downloadUpdate(): Promise<void> {
 
 export function installUpdate(): void {
   autoUpdater.quitAndInstall();
+}
+
+/**
+ * macOS update flow: we do NOT use Squirrel.Mac's silent in-place install —
+ * ad-hoc signing makes its code-signature check fail ("code failed to satisfy
+ * specified code requirement(s)"). Instead, download the version's .dmg to
+ * ~/Downloads and open it, so the user drags Woxus onto Applications and clicks
+ * Replace (Finder's standard update UX). Windows keeps silent NSIS updates.
+ */
+export function downloadMacDmg(version: string): void {
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const base = 'https://github.com/Itsnishant4/woxus-releases/releases/download';
+  const url = `${base}/v${version}/Woxus-${version}-${arch}.dmg`;
+  const dest = path.join(app.getPath('downloads'), `Woxus-${version}-${arch}.dmg`);
+
+  const fail = (e?: unknown) => {
+    try {
+      file.destroy();
+    } catch {
+      /* ignore */
+    }
+    _sink?.({ status: 'error', error: String((e as Error)?.message || e) });
+  };
+
+  const pipeToFile = (res: IncomingMessage) => {
+    const total = Number(res.headers['content-length']) || 0;
+    let received = 0;
+    res.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      if (total > 0) {
+        _sink?.({
+          status: 'downloading',
+          percent: Math.max(0, Math.min(99, Math.round((received / total) * 100))),
+        });
+      }
+    });
+    res.on('error', fail);
+    res.pipe(file);
+  };
+
+  const file = fs.createWriteStream(dest);
+  file.on('error', fail);
+  file.on('finish', () => {
+    file.close();
+    _sink?.({ status: 'mac-dmg-ready', version });
+    shell.openPath(dest).catch(() => {});
+  });
+
+  https
+    .get(url, (res) => {
+      const code = res.statusCode ?? 0;
+      // GitHub release downloads redirect (302) to a CDN — follow it.
+      if (code >= 300 && code < 400 && res.headers.location) {
+        res.resume();
+        https.get(res.headers.location, pipeToFile).on('error', fail);
+        return;
+      }
+      if (code !== 200) {
+        res.resume();
+        fail(new Error(`Download failed (HTTP ${code})`));
+        return;
+      }
+      pipeToFile(res);
+    })
+    .on('error', fail);
 }

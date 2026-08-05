@@ -60,20 +60,54 @@ def local_gemini_keys() -> list[str]:
     return _env_keys() or _persisted_keys()
 
 
-def fetch_admin_gemini_keys(license_key: str, hardware_id: str) -> list[str] | None:
-    """License-gated fetch of the admin-managed key pool.
+def _get_saved_license_info() -> tuple[str | None, str | None]:
+    """Auto-resolve license key and hardware ID from local persisted stores."""
+    lic_file = woxus_data_dir() / "licenses.json"
+    lic_key, hw_id = None, None
+    try:
+        if lic_file.exists():
+            data = json.loads(lic_file.read_text())
+            if isinstance(data, list) and data:
+                for item in reversed(data):
+                    if item.get("key") and not item.get("revoked"):
+                        lic_key = item.get("key")
+                        hw_ids = item.get("hardware_ids") or []
+                        if hw_ids:
+                            hw_id = hw_ids[0]
+                        break
+    except Exception:
+        pass
 
-    Only a valid, non-revoked license whose hardwareId is registered gets the
-    pool (the admin panel enforces this). Returns None on any failure so the
-    caller falls back to local keys instead of breaking the session.
+    if not hw_id:
+        trial_file = woxus_data_dir() / "trials.json"
+        try:
+            if trial_file.exists():
+                trials = json.loads(trial_file.read_text())
+                if isinstance(trials, dict) and trials:
+                    hw_id = next(iter(trials.keys()))
+        except Exception:
+            pass
+
+    return lic_key, hw_id
+
+
+def fetch_admin_gemini_keys(license_key: str | None, hardware_id: str | None) -> list[str] | None:
+    """Fetch the admin-managed key pool.
+
+    Supports license_key + hardware_id or hardware_id alone (for trial mode).
+    Returns None on any failure so the caller falls back to local keys.
     """
     server = os.getenv("LICENSE_SERVER_URL", "https://woxus-a.vercel.app").rstrip("/")
     if not server:
         return None
-    url = (
-        f"{server}/api/gemini-keys?"
-        + urllib.parse.urlencode({"license_key": license_key, "hardware_id": hardware_id})
-    )
+    params = {}
+    if license_key and license_key.strip():
+        params["license_key"] = license_key.strip()
+    if hardware_id and hardware_id.strip():
+        params["hardware_id"] = hardware_id.strip()
+    if not params:
+        return None
+    url = f"{server}/api/gemini-keys?" + urllib.parse.urlencode(params)
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=KEYS_FETCH_TIMEOUT_SECONDS) as resp:
@@ -110,7 +144,13 @@ async def refresh_gemini_api_keys(
         return list(_cache)
     if force_refresh:
         _cache, _cache_at = None, 0.0
-    if license_key and hardware_id:
+
+    if not license_key or not hardware_id:
+        saved_lic, saved_hw = _get_saved_license_info()
+        license_key = license_key or saved_lic
+        hardware_id = hardware_id or saved_hw
+
+    if license_key or hardware_id:
         # Run the blocking urllib fetch off the event loop so a slow/unreachable
         # admin panel can't stall other async requests.
         admin = await asyncio.to_thread(fetch_admin_gemini_keys, license_key, hardware_id)

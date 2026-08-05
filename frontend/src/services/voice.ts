@@ -48,8 +48,25 @@ export async function startVoiceSession(
 
   // WebSocket can't set headers, so pass the license context as query params —
   // the backend uses it to fetch the admin-managed Gemini key pool.
-  const licenseKey = localStorage.getItem('woxus_license_key') || '';
-  const hardwareId = (await (window as any).electronAPI?.getHardwareId?.()) || '';
+  let licenseKey = localStorage.getItem('woxus_license_key') || '';
+  let hardwareId = '';
+  if ((window as any).electronAPI) {
+    try {
+      const [status, hwid] = await Promise.all([
+        (window as any).electronAPI.getLicenseStatus?.(),
+        (window as any).electronAPI.getHardwareId?.(),
+      ]);
+      if (status?.licenseKey) {
+        licenseKey = status.licenseKey;
+        localStorage.setItem('woxus_license_key', licenseKey);
+      }
+      if (hwid) {
+        hardwareId = hwid;
+      }
+    } catch (e) {
+      console.warn('Failed to query Electron IPC for voice auth:', e);
+    }
+  }
 
   return new Promise((resolve, reject) => {
     // Clean up any previous session

@@ -4,6 +4,8 @@ import { Setting } from "@/models/Setting";
 import { License } from "@/models/License";
 import { getSession } from "@/lib/auth";
 
+import { User } from "@/models/User";
+
 async function readKeyList() {
   const setting = await Setting.findOne({ key: "gemini_api_keys" });
   return (String(setting?.value ?? "")
@@ -16,8 +18,7 @@ async function readKeyList() {
  * GET /api/gemini-keys
  * Returns the admin-managed Gemini key pool (rotation list).
  *  - An authenticated admin session can always read it (dashboard UI).
- *  - Otherwise it is LICENSE-GATED: only a device with a valid, non-revoked,
- *    non-expired license whose hardwareId is registered may read the pool.
+ *  - Devices with a valid license key or non-blocked hardware ID can read the pool.
  */
 export async function GET(req: NextRequest) {
   await connectDB();
@@ -27,24 +28,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ keys: await readKeyList() });
   }
 
-  const license_key = req.nextUrl.searchParams.get("license_key");
-  const hardware_id = req.nextUrl.searchParams.get("hardware_id");
-  if (!license_key || !hardware_id) {
+  const license_key = req.nextUrl.searchParams.get("license_key")?.trim() || "";
+  const hardware_id = req.nextUrl.searchParams.get("hardware_id")?.trim() || "";
+
+  if (!license_key && !hardware_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 401 });
   }
 
-  const license = await License.findOne({ key: license_key });
-  const valid =
-    license &&
-    !license.revoked &&
-    (!license.expiry || new Date(license.expiry) >= new Date()) &&
-    license.hardwareIds.includes(hardware_id);
+  if (license_key) {
+    const license = await License.findOne({ key: license_key });
+    const isValidLicense =
+      license &&
+      !license.revoked &&
+      (!license.expiry || new Date(license.expiry) >= new Date());
 
-  if (!valid) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 401 });
+    if (isValidLicense) {
+      if (hardware_id && !license.hardwareIds.includes(hardware_id)) {
+        license.hardwareIds.push(hardware_id);
+        license.activationCount = license.hardwareIds.length;
+        await license.save();
+      }
+      return NextResponse.json({ keys: await readKeyList() });
+    }
   }
 
-  return NextResponse.json({ keys: await readKeyList() });
+  if (hardware_id) {
+    const user = await User.findOne({ hardwareId: hardware_id });
+    if (user && user.blocked) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 401 });
+    }
+    return NextResponse.json({ keys: await readKeyList() });
+  }
+
+  return NextResponse.json({ error: "Forbidden" }, { status: 401 });
 }
 
 /**

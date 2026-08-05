@@ -104,6 +104,7 @@ export default function LicensePage({ onActivated }: Props) {
       // @ts-ignore
       const data = await window.electronAPI?.verifyLicense?.(licenseInput.trim());
       if (data?.valid) {
+        localStorage.setItem("woxus_license_key", licenseInput.trim());
         setState("licensed");
         onActivated?.();
       } else {

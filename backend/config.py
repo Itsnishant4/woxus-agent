@@ -15,22 +15,11 @@ if ENV_FILE.exists():
 
 _WOXUS_HOME = woxus_data_dir().parent
 
-# Shared Gemini keys (rotation list). Override via GEMINI_API_KEYS / GEMINI_API_KEY env.
-DEFAULT_GEMINI_API_KEYS = [
-    "AQ.Ab8RN6IoEpB5Lw0XWZ3IVQr3d0S8ytm_qjv9ay26GFxjVqqK1w",
-    "AQ.Ab8RN6J96r5fFb_ybFU_StlMF65Wc16ZIx6Wp9A_uZ1tzWwZxA",
-    "AQ.Ab8RN6Lf1-Nj0J-9KrgTjdjaTby1smFnVyqPCM8dqSyW-RK1Fw",
-    "AQ.Ab8RN6JX83eFur2d1oUhWKzntC78wyfUrCP0agncPx2Usek3jw",
-    "AQ.Ab8RN6LqenldF5LgKnqTlkirAKsoVt2ufT8iK6-rBQCrx51aDw",
-    "AQ.Ab8RN6LPzfkzbGhwVMrvPUma7rrFkCcZGJodmlAP9lpEgIiPkg",
-    "AQ.Ab8RN6JDxWdOVwJe2d4y2R01llDJ2BtPYr5x85qrtCXu8veI_w",
-]
-PLACEHOLDER_API_KEY = "YOUR_GEMINI_API_KEY"
-
 
 def get_api_keys() -> list[str]:
     """Resolve Gemini API keys: env GEMINI_API_KEYS (comma-separated) → env
-    GEMINI_API_KEY → persisted settings → embedded shared keys."""
+    GEMINI_API_KEY → persisted settings. Never falls back to embedded keys —
+    keys must come from env or the settings file (populated from the admin API)."""
     raw = (
         os.getenv("GEMINI_API_KEYS", "").strip()
         or os.getenv("GEMINI_API_KEY", "").strip()
@@ -46,12 +35,13 @@ def get_api_keys() -> list[str]:
                 return [k.strip() for k in gemini.split(",") if k.strip()]
         except (json.JSONDecodeError, OSError):
             pass
-    return list(DEFAULT_GEMINI_API_KEYS)
+    return []
 
 
 def get_api_key() -> str:
-    """First configured Gemini key (single-key compatibility)."""
-    return get_api_keys()[0]
+    """First configured Gemini key (single-key compatibility). Empty when none."""
+    keys = get_api_keys()
+    return keys[0] if keys else ""
 
 
 @lru_cache

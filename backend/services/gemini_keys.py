@@ -6,7 +6,6 @@ import time
 import urllib.parse
 import urllib.request
 
-from ..config import DEFAULT_GEMINI_API_KEYS
 from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
@@ -56,8 +55,9 @@ def _save_persisted_keys(keys: list[str]):
 
 
 def local_gemini_keys() -> list[str]:
-    """Offline resolution: env → persisted settings → embedded shared keys."""
-    return _env_keys() or _persisted_keys() or list(DEFAULT_GEMINI_API_KEYS)
+    """Offline resolution: env → persisted settings (populated from the admin
+    API). Never embedded static keys."""
+    return _env_keys() or _persisted_keys()
 
 
 def fetch_admin_gemini_keys(license_key: str, hardware_id: str) -> list[str] | None:
@@ -89,18 +89,27 @@ def fetch_admin_gemini_keys(license_key: str, hardware_id: str) -> list[str] | N
         return None
 
 
-async def refresh_gemini_api_keys(license_key: str | None, hardware_id: str | None) -> list[str]:
+async def refresh_gemini_api_keys(
+    license_key: str | None,
+    hardware_id: str | None,
+    force_refresh: bool = False,
+) -> list[str]:
     """Resolve the key pool for a voice session.
 
     Priority: env override → admin-managed pool (license-gated, TTL-cached,
     also persisted locally) → persisted settings → embedded shared keys.
+
+    force_refresh bypasses the TTL cache so a session that exhausted its pool
+    pulls a genuinely fresh set from the admin API instead of the stale copy.
     """
     global _cache, _cache_at
     env = _env_keys()
-    if env:
+    if env and not force_refresh:
         return env
-    if _cache and time.monotonic() - _cache_at < CACHE_TTL_SECONDS:
+    if not force_refresh and _cache and time.monotonic() - _cache_at < CACHE_TTL_SECONDS:
         return list(_cache)
+    if force_refresh:
+        _cache, _cache_at = None, 0.0
     if license_key and hardware_id:
         # Run the blocking urllib fetch off the event loop so a slow/unreachable
         # admin panel can't stall other async requests.

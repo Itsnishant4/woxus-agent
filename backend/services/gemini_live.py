@@ -42,6 +42,7 @@ class GeminiLiveService:
         input_sample_rate: int = 16000,
         tools: list[Any] | None = None,
         system_instruction: str | None = None,
+        key_refresher: Callable[..., Awaitable[list[str]]] | None = None,
     ):
         if isinstance(api_keys, str):
             api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
@@ -55,6 +56,11 @@ class GeminiLiveService:
         self.client = genai.Client(api_key=self.api_key)
         self.tools = tools or []
         self.system_instruction = system_instruction
+        # On total key exhaustion, pull a fresh pool from the admin API instead
+        # of dying on a static/bad set. Bounded to avoid an endless retry loop.
+        self.key_refresher = key_refresher
+        self._api_refreshes = 0
+        self._max_api_refreshes = 2
         self._running = False
         self.active_model = ""
         self._user_input_time = None
@@ -77,6 +83,31 @@ class GeminiLiveService:
         self.api_key = self.api_keys[self._key_index]
         self.client = genai.Client(api_key=self.api_key)
         logger.warning("Switching Gemini API key to #%d of %d", self._key_index + 1, len(self.api_keys))
+        return True
+
+    async def _refresh_from_api(self) -> bool:
+        """Pull a fresh key pool from the admin API and apply it.
+
+        Called when every local key fails (e.g. all exhausted/invalid). Returns
+        True when a usable new pool was applied so the caller retries the
+        connect. Bounded by _max_api_refreshes to avoid a hot retry loop.
+        """
+        if not self.key_refresher or self._api_refreshes >= self._max_api_refreshes:
+            return False
+        try:
+            pool = await self.key_refresher()
+        except Exception as e:
+            logger.warning("Gemini key refresh failed: %s", e)
+            return False
+        pool = [k.strip() for k in pool if k and k.strip()] if pool else []
+        if not pool:
+            return False
+        self._api_refreshes += 1
+        self.api_keys = pool
+        self._key_index = 0
+        self.api_key = pool[0]
+        self.client = genai.Client(api_key=self.api_key)
+        logger.info("Refreshed Gemini key pool from API (%d keys)", len(pool))
         return True
 
     def _build_config(self) -> types.LiveConnectConfig:
@@ -255,6 +286,14 @@ class GeminiLiveService:
                         rotated = True
                         logger.warning(
                             "Model %s failed (%s), retrying with next API key", model_name, e
+                        )
+                        break
+                    # All local keys failed — pull a fresh pool from the admin
+                    # API rather than dying on a static/bad set.
+                    if await self._refresh_from_api():
+                        rotated = True
+                        logger.warning(
+                            "All local Gemini keys failed; refreshed pool from API, retrying"
                         )
                         break
                     logger.error(

@@ -141,6 +141,12 @@ async def gemini_live_websocket(websocket: WebSocket):
     gemini_models = ["gemini-2.5-flash-native-audio-preview-12-2025"]
     logger.info("Available Gemini Live models: %s", gemini_models)
 
+    # When every key in the pool is exhausted at runtime, re-query the admin
+    # API (bypassing the TTL cache) so the session pulls fresh keys instead of
+    # failing on a stale/dead set.
+    async def _refresh_keys() -> list[str]:
+        return await refresh_gemini_api_keys(license_key, hardware_id, force_refresh=True)
+
     if not gemini_api_keys or gemini_api_keys == [""]:
         await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY not configured"})
         await websocket.close()
@@ -172,6 +178,7 @@ async def gemini_live_websocket(websocket: WebSocket):
         input_sample_rate=16000,
         tools=agent_tools,
         system_instruction=system_instruction,
+        key_refresher=_refresh_keys,
     )
 
     async def receive_from_client():

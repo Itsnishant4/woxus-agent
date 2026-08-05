@@ -9,7 +9,7 @@ A production-quality Windows desktop AI companion using **Google Gemini Live API
 - **Premium UI** — dark glassmorphism with AURORA ROSE palette (violet, rose-gold, neon lavender), built with React + Tailwind CSS.
 - **Windows native** — packaged as a single `Woxus.exe` via Tauri + PyInstaller.
 
----
+----
 
 ## Stack
 

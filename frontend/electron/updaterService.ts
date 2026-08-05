@@ -171,7 +171,14 @@ export function downloadMacDmg(version: string): void {
   file.on('finish', () => {
     file.close();
     _sink?.({ status: 'mac-dmg-ready', version });
-    shell.openPath(dest).catch(() => {});
+    shell.openPath(dest).then((err) => {
+      // openPath returns '' on success. Once the installer opens, let it a
+      // moment to mount, then fully quit so the user can drag Woxus onto
+      // Applications and click Replace without the app still running.
+      if (!err) {
+        setTimeout(() => app.quit(), 3000);
+      }
+    }).catch(() => {});
   });
 
   https

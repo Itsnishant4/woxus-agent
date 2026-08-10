@@ -1,10 +1,10 @@
 import json
 import logging
-import os
+import httpx
 from datetime import datetime
-from typing import Optional
 
 from ..paths import woxus_data_dir
+from ..config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -12,74 +12,39 @@ DATA_DIR = woxus_data_dir()
 TRIAL_FILE = DATA_DIR / "trials.json"
 TRIAL_DURATION_SECONDS = 600
 
+def _get_api_base() -> str:
+    return load_config().get("LICENSE_SERVER_URL", "https://woxus-a.vercel.app").rstrip("/")
 
-def _get_trial_duration_from_mongo() -> int:
+def _get_trial_duration_from_api() -> int:
     try:
-        import pymongo
-        uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
-        client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
-        db = client.get_database()
-        setting = db.settings.find_one({"key": "trial_duration_seconds"})
-        client.close()
-        if setting:
-            return int(setting["value"])
+        url = f"{_get_api_base()}/api/public/config"
+        res = httpx.get(url, timeout=5.0)
+        res.raise_for_status()
+        return res.json().get("trial_duration_seconds", TRIAL_DURATION_SECONDS)
     except Exception as e:
-        logger.warning(f"Could not read trial duration from MongoDB: {e}")
+        logger.warning(f"Could not read trial duration from API: {e}")
     return TRIAL_DURATION_SECONDS
 
-
-def _has_existing_trial_in_mongo(hardware_id: str, email: str | None) -> dict | None:
+def _register_trial_with_api(hardware_id: str, email: str | None, device_info: str | None, total_seconds: int) -> dict | None:
     try:
-        import pymongo
-        uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
-        client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
-        db = client.get_database()
-        query: dict[str, str] = {"hardwareId": hardware_id}
-        existing = db.users.find_one(query)
-        if not existing and email:
-            existing = db.users.find_one({"email": email})
-        client.close()
-        if existing:
-            return {
-                "active": existing.get("trialActive", False),
-                "remaining_seconds": 0,
-                "total_seconds": existing.get("trialDurationSeconds", TRIAL_DURATION_SECONDS),
-                "email": existing.get("email", ""),
-            }
+        url = f"{_get_api_base()}/api/public/trial"
+        payload = {
+            "hardwareId": hardware_id,
+            "email": email or "",
+            "deviceInfo": device_info or "",
+            "trialDurationSeconds": total_seconds
+        }
+        res = httpx.post(url, json=payload, timeout=5.0)
+        res.raise_for_status()
+        return res.json()
     except Exception as e:
-        logger.warning(f"Could not check trial in MongoDB: {e}")
+        logger.warning(f"Could not register trial with API: {e}")
     return None
-
-
-def _upsert_user_to_mongo(hardware_id: str, email: str | None, device_info: str | None, total_seconds: int):
-    try:
-        import pymongo
-        uri = os.getenv("MONGODB_URI", "mongodb://127.0.0.1:27017/woxus")
-        client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=2000)
-        db = client.get_database()
-        db.users.update_one(
-            {"hardwareId": hardware_id},
-            {"$set": {
-                "hardwareId": hardware_id,
-                "email": email or "",
-                "deviceInfo": device_info or "",
-                "trialActive": True,
-                "trialStartedAt": datetime.utcnow().isoformat(),
-                "trialDurationSeconds": total_seconds,
-                "lastActiveAt": datetime.utcnow().isoformat(),
-            }},
-            upsert=True,
-        )
-        client.close()
-    except Exception as e:
-        logger.warning(f"Could not upsert user to MongoDB: {e}")
-
 
 def _ensure_store():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not TRIAL_FILE.exists():
         TRIAL_FILE.write_text("{}")
-
 
 def _load_trials() -> dict:
     _ensure_store()
@@ -88,19 +53,14 @@ def _load_trials() -> dict:
     except (json.JSONDecodeError, FileNotFoundError):
         return {}
 
-
 def _save_trials(trials: dict):
     TRIAL_FILE.write_text(json.dumps(trials, indent=2))
 
-
 def start_trial(hardware_id: str, device_info: str | None = None, email: str | None = None) -> dict:
     trials = _load_trials()
-    total_seconds = _get_trial_duration_from_mongo()
+    total_seconds = _get_trial_duration_from_api()
 
-    existing_mongo = _has_existing_trial_in_mongo(hardware_id, email)
-    if existing_mongo and hardware_id not in trials:
-        return existing_mongo
-
+    # If the user already has a trial in trials.json, calculate remaining time
     if hardware_id in trials:
         existing = trials[hardware_id]
         started = datetime.fromisoformat(existing["started_at"])
@@ -121,6 +81,20 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
             "email": existing.get("email"),
         }
 
+    # Otherwise, register with the API
+    api_res = _register_trial_with_api(hardware_id, email, device_info, total_seconds)
+    
+    if api_res and api_res.get("exists"):
+        if not api_res.get("active"):
+            return {
+                "active": False,
+                "remaining_seconds": 0,
+                "total_seconds": api_res.get("total_seconds", total_seconds),
+                "email": api_res.get("email"),
+            }
+        total_seconds = api_res.get("total_seconds", total_seconds)
+    
+    # Save the new trial to trials.json
     record = {
         "hardware_id": hardware_id,
         "device_info": device_info or "",
@@ -130,7 +104,6 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
     }
     trials[hardware_id] = record
     _save_trials(trials)
-    _upsert_user_to_mongo(hardware_id, email, device_info, total_seconds)
 
     return {
         "active": True,
@@ -139,11 +112,10 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
         "email": record.get("email"),
     }
 
-
 def get_trial_status(hardware_id: str) -> dict:
     trials = _load_trials()
     if hardware_id not in trials:
-        total_seconds = _get_trial_duration_from_mongo()
+        total_seconds = _get_trial_duration_from_api()
         return {
             "active": False,
             "remaining_seconds": 0,

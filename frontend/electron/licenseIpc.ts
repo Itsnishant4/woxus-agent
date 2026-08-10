@@ -143,9 +143,10 @@ export async function getLicenseStatus(): Promise<{
         trialTotal: data.total_seconds,
       };
     }
+    return { status: 'unlicensed', trialTotal: data.total_seconds };
   } catch { /* offline */ }
 
-  return { status: 'unlicensed' };
+  return { status: 'unlicensed', trialTotal: 600 };
 }
 
 export async function getTrialStatus(): Promise<{

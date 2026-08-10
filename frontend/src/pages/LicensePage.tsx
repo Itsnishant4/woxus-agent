@@ -51,6 +51,10 @@ export default function LicensePage({ onActivated }: Props) {
     const result = await window.electronAPI?.getLicenseStatus?.();
     if (!result) { setState("unlicensed"); return; }
 
+    if (result.trialTotal) {
+      setTrialTotal(result.trialTotal);
+    }
+
     if (result.status === "licensed") {
       setState("licensed");
       return;
@@ -208,7 +212,7 @@ export default function LicensePage({ onActivated }: Props) {
               <AlertCircle className="h-6 w-6" />
             </div>
             <h2 className="text-lg font-bold text-foreground">Free Trial Expired</h2>
-            <p className="text-sm text-muted-foreground max-w-sm">Your 10-minute trial has finished. Purchase a license to continue using Woxus.</p>
+            <p className="text-sm text-muted-foreground max-w-sm">Your {Math.round(trialTotal / 60)}-minute trial has finished. Purchase a license to continue using Woxus.</p>
           </div>
           <a
             href={buyUrl}
@@ -241,7 +245,7 @@ export default function LicensePage({ onActivated }: Props) {
             <div>
               <h2 className="text-base font-semibold text-foreground">Free Trial Active</h2>
               <p className="text-xs text-muted-foreground font-medium">
-                {trialEmail ? `Trial registered for ${trialEmail}` : "10-minute trial access in progress"}
+                {trialEmail ? `Trial registered for ${trialEmail}` : `${Math.round(trialTotal / 60)}-minute trial access in progress`}
               </p>
             </div>
           </div>
@@ -363,7 +367,7 @@ export default function LicensePage({ onActivated }: Props) {
             </div>
             <div>
               <h2 className="text-base font-semibold text-foreground">Start Free Trial</h2>
-              <p className="text-xs text-muted-foreground font-medium">Get 10 minutes of free trial access</p>
+              <p className="text-xs text-muted-foreground font-medium">Get {Math.round(trialTotal / 60)} minutes of free trial access</p>
             </div>
           </div>
           <div className="space-y-3.5 pt-1">

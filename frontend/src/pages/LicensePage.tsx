@@ -49,7 +49,13 @@ export default function LicensePage({ onActivated }: Props) {
   const checkStatus = useCallback(async () => {
     // @ts-ignore
     const result = await window.electronAPI?.getLicenseStatus?.();
-    if (!result) { setState("unlicensed"); return; }
+    if (!result) { 
+      if (localStorage.getItem("woxus_trial_expired") === "true") {
+        setTrialExpired(true);
+      }
+      setState("unlicensed"); 
+      return; 
+    }
 
     if (result.trialTotal) {
       setTrialTotal(result.trialTotal);
@@ -68,6 +74,9 @@ export default function LicensePage({ onActivated }: Props) {
       return;
     }
 
+    if (localStorage.getItem("woxus_trial_expired") === "true") {
+      setTrialExpired(true);
+    }
     setState("unlicensed");
   }, []);
 
@@ -109,6 +118,7 @@ export default function LicensePage({ onActivated }: Props) {
       const data = await window.electronAPI?.verifyLicense?.(licenseInput.trim());
       if (data?.valid) {
         localStorage.setItem("woxus_license_key", licenseInput.trim());
+        localStorage.removeItem("woxus_trial_expired");
         setState("licensed");
         onActivated?.();
       } else {
@@ -130,7 +140,11 @@ export default function LicensePage({ onActivated }: Props) {
         setTrialTotal(data.total_seconds);
         setTrialEmail(data.email || trialEmail);
         setState("trial");
+        localStorage.removeItem("woxus_trial_expired");
         onActivated?.();
+      } else {
+        localStorage.setItem("woxus_trial_expired", "true");
+        setTrialExpired(true);
       }
     } catch {
       /* ignore */

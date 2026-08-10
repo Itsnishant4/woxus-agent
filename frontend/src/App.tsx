@@ -190,6 +190,23 @@ export default function App() {
     checkLicense();
   }, [checkLicense]);
 
+  useEffect(() => {
+    if (appStatus !== 'trial') return;
+    const interval = setInterval(async () => {
+      try {
+        // @ts-ignore
+        const data = await window.electronAPI?.getTrialStatus?.();
+        if (data && !data.active) {
+          localStorage.setItem('woxus_trial_expired', 'true');
+          setAppStatus('unlicensed');
+        }
+      } catch {
+        // ignore
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [appStatus]);
+
   const checkPermission = useCallback(async () => {
     // @ts-ignore
     const status = await window.electronAPI?.getPermissionStatus?.();

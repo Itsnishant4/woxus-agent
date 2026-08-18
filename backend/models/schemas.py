@@ -116,7 +116,7 @@ class LicenseVerifyResponse(BaseModel):
 class TrialStartRequest(BaseModel):
     hardware_id: str
     device_info: str | None = None
-    email: str | None = None
+    email: str
 
 
 class TrialStatusResponse(BaseModel):

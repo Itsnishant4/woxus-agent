@@ -13,6 +13,8 @@ router = APIRouter()
 async def trial_start(req: TrialStartRequest):
     if not req.hardware_id:
         raise HTTPException(400, "hardware_id required")
+    if not req.email:
+        raise HTTPException(400, "email required")
 
     status = trial_tracker.start_trial(req.hardware_id, req.device_info, req.email)
     return TrialStatusResponse(

@@ -115,20 +115,33 @@ export async function getLicenseStatus(): Promise<{
     }
   }
 
-  // Check cached trial
+  // Check cached trial accurately
   const cachedTrial = settingsStore.getCachedTrialStatus();
+  console.log('[LicenseIpc] Checking local trial cache...', cachedTrial);
   if (cachedTrial?.active) {
-    return {
-      status: 'trial',
-      trialEmail: cachedTrial.email,
-      trialRemaining: cachedTrial.remaining_seconds,
-      trialTotal: cachedTrial.total_seconds,
-    };
+    const startedAt = settingsStore.getTrialStartedAt();
+    if (startedAt > 0) {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      const remaining = Math.max(0, cachedTrial.total_seconds - elapsed);
+      console.log(`[LicenseIpc] Local cache calculation -> elapsed: ${elapsed}s, remaining: ${remaining}s`);
+      if (remaining > 0) {
+        return {
+          status: 'trial',
+          trialEmail: cachedTrial.email,
+          trialRemaining: Math.floor(remaining),
+          trialTotal: cachedTrial.total_seconds,
+        };
+      }
+      console.log('[LicenseIpc] Local cache says trial has expired.');
+      return { status: 'unlicensed', trialTotal: cachedTrial.total_seconds };
+    }
   }
 
+  console.log(`[LicenseIpc] Fetching trial status from local Python backend API: ${apiBase()}/trial/status?hardware_id=${hwid}`);
   try {
     const res = await fetch(`${apiBase()}/trial/status?hardware_id=${hwid}`);
     const data = await res.json();
+    console.log('[LicenseIpc] Local Python backend returned trial status:', data);
     if (data.active) {
       settingsStore.setCachedTrialStatus({
         active: true,
@@ -136,6 +149,7 @@ export async function getLicenseStatus(): Promise<{
         remaining_seconds: data.remaining_seconds,
         total_seconds: data.total_seconds,
       });
+      settingsStore.setTrialStartedAt(Date.now() - (data.total_seconds - data.remaining_seconds) * 1000);
       return {
         status: 'trial',
         trialEmail: data.email,
@@ -143,8 +157,11 @@ export async function getLicenseStatus(): Promise<{
         trialTotal: data.total_seconds,
       };
     }
+    console.log('[LicenseIpc] Local Python backend says unlicensed or expired.');
     return { status: 'unlicensed', trialTotal: data.total_seconds };
-  } catch { /* offline */ }
+  } catch (e) { 
+    console.log('[LicenseIpc] Failed to fetch from local Python backend, marking offline.', e);
+  }
 
   return { status: 'unlicensed', trialTotal: 600 };
 }
@@ -156,16 +173,19 @@ export async function getTrialStatus(): Promise<{
   email?: string;
 }> {
   const hwid = getHardwareId();
+  console.log(`[LicenseIpc] Polling local Python backend for trial status updates...`);
   try {
     const res = await fetch(`${apiBase()}/trial/status?hardware_id=${hwid}`);
     const data = await res.json();
+    console.log('[LicenseIpc] Polling response:', data);
     return {
       active: data.active,
       remaining_seconds: data.remaining_seconds,
       total_seconds: data.total_seconds,
       email: data.email,
     };
-  } catch {
+  } catch (e) {
+    console.log('[LicenseIpc] Polling failed, backend may be offline.', e);
     return { active: false, remaining_seconds: 0, total_seconds: 600 };
   }
 }

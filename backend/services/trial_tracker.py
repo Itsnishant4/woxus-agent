@@ -41,6 +41,7 @@ def _register_trial_with_api(hardware_id: str, email: str | None, device_info: s
         logger.warning(f"Could not register trial with API: {e}")
     return None
 
+
 def _ensure_store():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not TRIAL_FILE.exists():
@@ -57,6 +58,7 @@ def _save_trials(trials: dict):
     TRIAL_FILE.write_text(json.dumps(trials, indent=2))
 
 def start_trial(hardware_id: str, device_info: str | None = None, email: str | None = None) -> dict:
+    logger.info(f"[TrialTracker] start_trial called for hwid={hardware_id}")
     trials = _load_trials()
     total_seconds = _get_trial_duration_from_api()
 
@@ -66,6 +68,8 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
         started = datetime.fromisoformat(existing["started_at"])
         elapsed = (datetime.utcnow() - started).total_seconds()
         remaining = max(0, existing["total_seconds"] - elapsed)
+        
+        logger.info(f"[TrialTracker] Found existing trial in local trials.json. Elapsed: {elapsed}s, Remaining: {remaining}s")
 
         if remaining > 0:
             return {
@@ -113,8 +117,10 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
     }
 
 def get_trial_status(hardware_id: str) -> dict:
+    logger.info(f"[TrialTracker] get_trial_status called for hwid={hardware_id}")
     trials = _load_trials()
     if hardware_id not in trials:
+        logger.info(f"[TrialTracker] No trial found in local trials.json for hwid={hardware_id}")
         total_seconds = _get_trial_duration_from_api()
         return {
             "active": False,
@@ -126,6 +132,9 @@ def get_trial_status(hardware_id: str) -> dict:
     started = datetime.fromisoformat(rec["started_at"])
     elapsed = (datetime.utcnow() - started).total_seconds()
     remaining = max(0, rec["total_seconds"] - elapsed)
+    
+    logger.info(f"[TrialTracker] Local trial check. Elapsed: {elapsed}s, Remaining: {remaining}s")
+    
     return {
         "active": remaining > 0,
         "remaining_seconds": int(remaining),

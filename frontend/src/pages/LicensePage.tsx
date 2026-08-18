@@ -387,14 +387,14 @@ export default function LicensePage({ onActivated }: Props) {
           <div className="space-y-3.5 pt-1">
             <input
               type="email"
-              placeholder="Your email (optional)"
+              placeholder="Your email (required)"
               value={trialEmail}
               onChange={(e) => setTrialEmail(e.target.value)}
               className={inputCls}
             />
             <button
               onClick={handleStartTrial}
-              disabled={startingTrial}
+              disabled={startingTrial || !trialEmail.trim() || !trialEmail.includes("@")}
               className={primaryBtnCls + " w-full"}
             >
               {startingTrial ? "Starting..." : "Start Free Trial"}

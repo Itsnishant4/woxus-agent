@@ -57,15 +57,55 @@ def _load_trials() -> dict:
 def _save_trials(trials: dict):
     TRIAL_FILE.write_text(json.dumps(trials, indent=2))
 
+def _parse_dt(value: str | None) -> datetime | None:
+    """Parse ISO datetime from server (handles trailing Z) or local naive stamp."""
+    if not value:
+        return None
+    try:
+        s = value.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+def get_configured_duration() -> int:
+    """Current global trial duration in seconds (admin API, fallback default)."""
+    return _get_trial_duration_from_api()
+
 def start_trial(hardware_id: str, device_info: str | None = None, email: str | None = None) -> dict:
     logger.info(f"[TrialTracker] start_trial called for hwid={hardware_id}")
     trials = _load_trials()
     total_seconds = _get_trial_duration_from_api()
 
-    # If the user already has a trial in trials.json, calculate remaining time
+    # If the user already has a trial in trials.json, re-sync with the server
+    # when reachable so admin changes (duration edit, trial reset) propagate
+    # to devices. Offline → local calculation as before.
     if hardware_id in trials:
         existing = trials[hardware_id]
-        started = datetime.fromisoformat(existing["started_at"])
+        api_res = _register_trial_with_api(hardware_id, email, device_info, existing["total_seconds"])
+        if api_res and api_res.get("exists"):
+            if not api_res.get("active"):
+                return {
+                    "active": False,
+                    "remaining_seconds": 0,
+                    "total_seconds": api_res.get("total_seconds", existing["total_seconds"]),
+                    "email": api_res.get("email", existing.get("email")),
+                }
+            srv_total = api_res.get("total_seconds") or existing["total_seconds"]
+            srv_started = _parse_dt(api_res.get("trial_started_at"))
+            loc_started = _parse_dt(existing["started_at"])
+            if srv_started and (loc_started is None or srv_started > loc_started):
+                # Admin reset the trial clock — adopt server start + duration.
+                existing["started_at"] = srv_started.isoformat()
+            existing["total_seconds"] = srv_total
+            if email:
+                existing["email"] = email
+            _save_trials(trials)
+        started = _parse_dt(existing["started_at"]) or datetime.utcnow()
         elapsed = (datetime.utcnow() - started).total_seconds()
         remaining = max(0, existing["total_seconds"] - elapsed)
         

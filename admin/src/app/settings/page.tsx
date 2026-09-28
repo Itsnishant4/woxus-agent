@@ -103,7 +103,7 @@ export default function SettingsPage() {
       <Card className="border-border/60 shadow-sm max-w-lg">
         <CardHeader><CardTitle className="text-sm">Trial Duration</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <Field label="Trial (seconds)" value={settings.trial_duration_seconds} onChange={(v) => update("trial_duration_seconds", v)} hint="Min: 60, Max: 86400" />
+          <Field label="Trial (seconds)" value={settings.trial_duration_seconds} onChange={(v) => update("trial_duration_seconds", v)} hint="Min: 60 seconds, no maximum" />
         </CardContent>
       </Card>
 

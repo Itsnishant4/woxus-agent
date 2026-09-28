@@ -25,6 +25,11 @@ async def trial_start(req: TrialStartRequest):
     )
 
 
+@router.get("/duration")
+async def trial_duration():
+    """Global trial duration from admin API — drives dynamic UI messages."""
+    return {"total_seconds": trial_tracker.get_configured_duration()}
+
 @router.get("/status")
 async def trial_status(hardware_id: str):
     if not hardware_id:

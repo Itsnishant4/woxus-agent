@@ -55,6 +55,21 @@ export default function UsersPage() {
     }
   };
 
+  const resetTrial = async (hardwareId: string) => {
+    if (!confirm("Reset this user's trial clock to the current global duration?")) return;
+    setBusyUser(hardwareId);
+    try {
+      await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hardwareId, resetTrial: true }),
+      });
+      await fetchUsers();
+    } finally {
+      setBusyUser(null);
+    }
+  };
+
   const pages = Math.ceil(total / 20);
 
   return (
@@ -110,6 +125,16 @@ export default function UsersPage() {
                     {u.lastActiveAt ? new Date(u.lastActiveAt).toLocaleDateString() : "—"}
                   </td>
                   <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => resetTrial(u.hardwareId)}
+                      disabled={busyUser === u.hardwareId}
+                      title="Restart trial clock with current global duration"
+                      className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-violet-500/10 text-violet-500 hover:bg-violet-500/20"
+                    >
+                      {busyUser === u.hardwareId ? <Spinner className="h-3 w-3" /> : null}
+                      Reset trial
+                    </button>
                     <button
                       onClick={() => toggleBlock(u.hardwareId, u.blocked)}
                       disabled={busyUser === u.hardwareId}
@@ -119,9 +144,9 @@ export default function UsersPage() {
                           : "bg-red-500/10 text-red-500 hover:bg-red-500/20"
                       }`}
                     >
-                      {busyUser === u.hardwareId ? <Spinner className="h-3 w-3" /> : null}
                       {u.blocked ? "Unblock" : "Block"}
                     </button>
+                    </div>
                   </td>
                 </tr>
               ))}

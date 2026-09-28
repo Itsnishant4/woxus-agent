@@ -37,7 +37,27 @@ export async function PATCH(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await connectDB();
-  const { hardwareId, blocked } = await req.json();
+  const { hardwareId, blocked, resetTrial } = await req.json();
+
+  if (resetTrial) {
+    // Restart trial clock with the CURRENT global duration so admin
+    // setting changes apply to existing users too.
+    const { Setting } = await import("@/models/Setting");
+    const setting = await Setting.findOne({ key: "trial_duration_seconds" });
+    const duration = setting ? parseInt(setting.value) : 600;
+    const user = await User.findOneAndUpdate(
+      { hardwareId },
+      {
+        trialActive: true,
+        trialStartedAt: new Date(),
+        trialDurationSeconds: duration,
+        lastActiveAt: new Date(),
+      },
+      { new: true }
+    );
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return NextResponse.json({ success: true, user });
+  }
 
   const user = await User.findOneAndUpdate(
     { hardwareId },

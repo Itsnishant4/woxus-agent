@@ -189,6 +189,41 @@ memory_delete_declaration = types.FunctionDeclaration(
 )
 
 
+# --- WhatsApp tool (wacli backed, voice direct) ---
+
+whatsapp_send_declaration = types.FunctionDeclaration(
+    name="whatsapp_send",
+    description=(
+        "Send WhatsApp message via wacli linked device. "
+        "Args: to_raw (verbatim name/phone from user), message, confirm (default false), pick (index when ambiguous). "
+        "First call with confirm=false returns preview with NLP score/matched name. "
+        "Only recall with confirm=true after user says yes. Never invent numbers."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "to_raw": types.Schema(
+                type=types.Type.STRING,
+                description="Verbatim recipient from voice (name or phone).",
+            ),
+            "message": types.Schema(
+                type=types.Type.STRING,
+                description="Message text to send.",
+            ),
+            "confirm": types.Schema(
+                type=types.Type.BOOLEAN,
+                description="True only after user confirmed recipient + text.",
+                default=False,
+            ),
+            "pick": types.Schema(
+                type=types.Type.INTEGER,
+                description="Candidate index when ambiguous.",
+            ),
+        },
+        required=["to_raw", "message"],
+    ),
+)
+
 # --- Tool list for registering with Gemini Main Agent ---
 #
 # The main agent delegates computer tasks to the mini agent, AND can save /
@@ -201,5 +236,6 @@ agent_tools = [
         delegate_task_declaration,
         memory_create_declaration,
         memory_list_declaration,
+        whatsapp_send_declaration,
     ]),
 ]

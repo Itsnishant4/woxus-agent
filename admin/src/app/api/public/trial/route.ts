@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
         exists: true,
         active: existing.trialActive || false,
         total_seconds: existing.trialDurationSeconds || 600,
+        trial_started_at: existing.trialStartedAt || null,
         email: existing.email || "",
       });
     }

@@ -134,6 +134,8 @@ async def handle_tool_call(name: str, args: dict) -> dict:
             return _memory_list(args)
         elif name == "memory_delete":
             return _memory_delete(args)
+        elif name == "whatsapp_send":
+            return await _whatsapp_send(args)
         else:
             return {"error": f"Unknown tool: {name}"}
     except Exception as e:
@@ -275,6 +277,56 @@ def _write_to_focused_input(args: dict) -> dict:
     if not text:
         return {"error": "No text provided to write"}
     return {"action": "paste", "text": text, "ok": True}
+
+
+# --- WhatsApp (wacli + NLP resolver) ---
+
+async def _whatsapp_send(args: dict) -> dict:
+    to_raw = str(args.get("to_raw", args.get("to", "")) or "").strip()
+    message = str(args.get("message", "") or "").strip()
+    confirm = bool(args.get("confirm", False))
+    pick = args.get("pick")
+    if not to_raw or not message:
+        return {"error": "to_raw and message required"}
+    try:
+        from .whatsapp_contacts import resolve_contact
+        from . import whatsapp as wa
+    except Exception as e:
+        return {"error": f"whatsapp backend unavailable: {e}"}
+
+    # explicit pick path
+    if pick is not None:
+        preview = resolve_contact(to_raw)
+        cands = preview.get("candidates", [])
+        try:
+            chosen = cands[int(pick)]
+            to_send = chosen.get("phone", to_raw)
+        except Exception:
+            return {"error": "invalid pick index", "candidates": cands}
+        if not confirm:
+            return {"status": "needs_confirm", "matched": chosen.get("name"), "phone": to_send, "score": chosen.get("score")}
+        return await wa.send_text_async(to_send, message)
+
+    resolved = resolve_contact(to_raw)
+    status = resolved.get("status")
+    if status in ("exact", "fuzzy", "phone"):
+        to_send = resolved.get("phone", to_raw)
+        if not confirm:
+            return {
+                "status": "needs_confirm",
+                "matched": resolved.get("matched", to_send),
+                "phone": to_send,
+                "score": resolved.get("score"),
+                "alternatives": resolved.get("alternatives", []),
+            }
+        res = await wa.send_text_async(to_send, message)
+        if isinstance(res, dict):
+            res["nlp_score"] = resolved.get("score")
+            res["matched"] = resolved.get("matched", to_send)
+        return res
+    if status == "ambiguous":
+        return {"status": "needs_pick", "candidates": resolved.get("candidates", []), "score": resolved.get("score")}
+    return {"status": "unknown_recipient", "to_raw": to_raw, "candidates": resolved.get("candidates", [])}
 
 
 # --- Memory ---

@@ -190,6 +190,17 @@ export async function getTrialStatus(): Promise<{
   }
 }
 
+export async function getTrialDuration(): Promise<{ total_seconds: number }> {
+  try {
+    const res = await fetch(`${apiBase()}/trial/duration`);
+    const data = await res.json();
+    const total = Number(data.total_seconds) || 600;
+    return { total_seconds: total };
+  } catch {
+    return { total_seconds: 600 };
+  }
+}
+
 export async function startTrial(email: string): Promise<{
   active: boolean;
   remaining_seconds: number;

@@ -3,7 +3,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { settingsStore } from './store.js';
 import { BackendManager } from './backendManager.js';
-import { verifyLicense, getLicenseStatus, getTrialStatus, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
+import { verifyLicense, getLicenseStatus, getTrialStatus, getTrialDuration, startTrial, submitFeedback, getHardwareId } from './licenseIpc.js';
 import { initAutoUpdater, checkForUpdates, downloadUpdate, downloadMacDmg, installUpdate, UpdateStatus } from './updaterService.js';
 import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
 import { checkPermission, openPermissionSettings } from './permissionService.js';
@@ -432,6 +432,8 @@ ipcMain.handle('license:get-status', () => getLicenseStatus());
 ipcMain.handle('trial:status', () => getTrialStatus());
 
 ipcMain.handle('trial:start', (_event, email: string) => startTrial(email));
+
+ipcMain.handle('trial:get-duration', () => getTrialDuration());
 
 ipcMain.handle('feedback:submit', (_event, rating: number, text: string) => submitFeedback(rating, text));
 

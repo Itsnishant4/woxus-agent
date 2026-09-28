@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import load_config
 from .middleware import license_check_middleware, trial_limiter_middleware
-from .routes import bugs, chat, feedback, license, memory, model, notes, overlay, settings, system, tasks, terminal, trial, voice
+from .routes import bugs, chat, feedback, license, memory, model, notes, overlay, settings, system, tasks, terminal, trial, voice, whatsapp
 
 
 @asynccontextmanager
@@ -88,6 +88,7 @@ app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(model.router, prefix="/api/model", tags=["model"])
 app.include_router(overlay.router, prefix="/api/overlay", tags=["overlay"])
+app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["whatsapp"])
 
 
 if __name__ == "__main__":

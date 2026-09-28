@@ -44,16 +44,33 @@ export default function Buy() {
       setHardwareFromApp(true);
     }
     if (plan) setSelected(plan);
-    setStep('plans');
+    // Stay on 'loading' until pricing resolves below.
   }, [hardwareIdFromUrl, plan]);
 
+  const [plansLoading, setPlansLoading] = useState(true);
+
   useEffect(() => {
+    let cancelled = false;
+    setPlansLoading(true);
     fetch(`${ADMIN_API}/api/pricing`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`pricing ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
+        if (cancelled) return;
         setPlans(d.plans || []);
       })
-      .catch(() => setError('Could not load pricing.'));
+      .catch(() => {
+        if (cancelled) return;
+        setError('Could not load pricing. Check connection and retry.');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPlansLoading(false);
+        setStep('plans');
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const selectedPlan = plans.find((p) => p.id === selected);
@@ -153,8 +170,29 @@ export default function Buy() {
     );
   }
 
-  if (step === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-400 text-sm">Loading...</div>;
+  if (step === 'loading' || plansLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white p-6">
+        <div className="max-w-3xl w-full space-y-8 animate-pulse">
+          <div className="text-center space-y-2">
+            <div className="w-10 h-10 mx-auto rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+              <span className="text-sm font-bold">W</span>
+            </div>
+            <h1 className="text-2xl font-semibold">Woxus AI</h1>
+            <p className="text-sm text-zinc-400">Loading plans…</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {[0, 1].map((i) => (
+              <div key={i} className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/60 space-y-3">
+                <div className="h-4 w-20 rounded bg-zinc-800" />
+                <div className="h-9 w-36 rounded bg-zinc-800" />
+                <div className="h-3 w-48 rounded bg-zinc-800" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -191,6 +229,18 @@ export default function Buy() {
                 </p>
               </button>
             ))}
+          </div>
+        )}
+
+        {step === 'plans' && !plansLoading && plans.length === 0 && (
+          <div className="max-w-md mx-auto text-center space-y-3">
+            <p className="text-sm text-red-400">{error || 'No plans available right now.'}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded-lg bg-zinc-800 text-sm text-zinc-200 hover:bg-zinc-700 transition-all"
+            >
+              Retry
+            </button>
           </div>
         )}
 

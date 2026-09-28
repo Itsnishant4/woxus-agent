@@ -32,9 +32,9 @@ export async function PUT(req: NextRequest) {
   await connectDB();
   const { trialDurationSeconds } = await req.json();
 
-  if (!trialDurationSeconds || trialDurationSeconds < 60 || trialDurationSeconds > 86400) {
+  if (!trialDurationSeconds || trialDurationSeconds < 60) {
     return NextResponse.json(
-      { error: "Duration must be between 60 and 86400 seconds" },
+      { error: "Duration must be at least 60 seconds (no maximum)" },
       { status: 400 }
     );
   }

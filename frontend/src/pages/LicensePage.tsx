@@ -19,6 +19,7 @@ export default function LicensePage({ onActivated }: Props) {
 
   const [trialSec, setTrialSec] = useState(0);
   const [trialTotal, setTrialTotal] = useState(600);
+  const [trialDurationLabel, setTrialDurationLabel] = useState<string | null>(null);
   const [startingTrial, setStartingTrial] = useState(false);
   const [trialEmail, setTrialEmail] = useState("");
   const [trialExpired, setTrialExpired] = useState(false);
@@ -83,6 +84,15 @@ export default function LicensePage({ onActivated }: Props) {
   useEffect(() => {
     checkStatus();
   }, [checkStatus]);
+
+  // Dynamic trial message from admin API (global duration, not device cache).
+  useEffect(() => {
+    // @ts-ignore
+    window.electronAPI?.getTrialDuration?.().then((d: any) => {
+      const total = Number(d?.total_seconds) || 600;
+      setTrialDurationLabel(formatDuration(total));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (state === "trial") {
@@ -170,6 +180,22 @@ export default function LicensePage({ onActivated }: Props) {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  const formatDuration = (totalSeconds: number) => {
+    const s = Math.max(60, Math.round(totalSeconds));
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const minutes = Math.round((s % 3600) / 60);
+    if (days >= 1) {
+      const d = `${days} day${days === 1 ? "" : "s"}`;
+      return hours > 0 ? `${d} ${hours} hour${hours === 1 ? "" : "s"}` : d;
+    }
+    if (hours >= 1) {
+      const h = `${hours} hour${hours === 1 ? "" : "s"}`;
+      return minutes > 0 ? `${h} ${minutes} minute${minutes === 1 ? "" : "s"}` : h;
+    }
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
   };
 
   const inputCls =
@@ -381,7 +407,7 @@ export default function LicensePage({ onActivated }: Props) {
             </div>
             <div>
               <h2 className="text-base font-semibold text-foreground">Start Free Trial</h2>
-              <p className="text-xs text-muted-foreground font-medium">Get {Math.round(trialTotal / 60)} minutes of free trial access</p>
+              <p className="text-xs text-muted-foreground font-medium">Get {trialDurationLabel ?? <span className="inline-block h-3 w-24 align-middle rounded bg-muted-foreground/20 animate-pulse" />} of free trial access</p>
             </div>
           </div>
           <div className="space-y-3.5 pt-1">

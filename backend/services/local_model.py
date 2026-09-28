@@ -11,7 +11,25 @@ import platform
 import re
 import sys
 import threading
+import ssl
 import urllib.request
+
+# --- TLS trust bootstrap --------------------------------------------------
+# python.org macOS builds (incl. Python 3.14) ship without a CA bundle wired
+# into the stdlib `ssl` module, so HTTPS via urllib.request fails with:
+#   [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+#   unable to get local issuer certificate
+# certifi is installed in this venv (transitive dependency), so we point the
+# stdlib ssl contexts at it and build an explicit context to hand to urlopen.
+try:
+    import certifi as _certifi  # noqa: N812
+    _ssl_cafile = _certifi.where()
+    os.environ.setdefault("SSL_CERT_FILE", _ssl_cafile)
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", _ssl_cafile)
+    os.environ.setdefault("CURL_CA_BUNDLE", _ssl_cafile)
+    _SSL_CONTEXT = ssl.create_default_context(cafile=_ssl_cafile)
+except Exception:  # certifi unavailable / no CA bundle yet
+    _SSL_CONTEXT = ssl.create_default_context()
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +185,7 @@ def _parallel_download(url: str, dest: str, total_bytes: int, streams: int = 6) 
                     "User-Agent": "Mozilla/5.0 (Woxus-Local-Installer)",
                 },
             )
-            with urllib.request.urlopen(req, timeout=60) as resp, open(part, "ab") as out_f:
+            with urllib.request.urlopen(req, timeout=60, context=_SSL_CONTEXT) as resp, open(part, "ab") as out_f:
                 while True:
                     chunk = resp.read(1 << 20)
                     if not chunk:
@@ -224,7 +242,7 @@ def _download_worker():
         _model_status["status_text"] = f"Downloading Local Mini Agent (0.0 MB / {round(total_bytes/1024/1024,1)} MB)"
     try:
         req = urllib.request.Request(target_url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=_SSL_CONTEXT) as resp:
             total_bytes = int(resp.headers.get("Content-Length") or 0) or MODEL_BYTES
             with _lock:
                 _model_status["total_bytes"] = total_bytes
@@ -379,6 +397,20 @@ async def run_local_mini_agent(prompt: str) -> dict:
                     "message": res.get("text") or "Typed into focused input.",
                 }
 
+    # WhatsApp deterministic preview (mini agent has no history, so affirmations
+    # complete in the overlay/voice layer — here we only produce the preview).
+    try:
+        _wa_parsed = _parse_whatsapp_request(prompt)
+    except Exception:
+        _wa_parsed = None
+    if _wa_parsed and not direct_cmd:
+        try:
+            _wa_handled = await _handle_whatsapp_prompt(prompt, None, hw_info)
+            if _wa_handled is not None:
+                return _wa_handled
+        except Exception as e:
+            logger.warning("🤖 [LOCAL MINI AGENT] WhatsApp fast-path failed: %s", e)
+
     if not direct_cmd:
         # Agentic loop: AI reasons → calls tools → sees results → answers
         from .nano_inference import AGENT_PROMPT, agent_step, is_model_ready
@@ -425,6 +457,29 @@ async def run_local_mini_agent(prompt: str) -> dict:
             if action == "tool":
                 tool_name = str((decision or {}).get("tool") or "terminal")
                 args = (decision or {}).get("args") or {}
+                if tool_name == "whatsapp_send":
+                    wa_args = {
+                        "to_raw": str(args.get("to_raw", args.get("to", "")) or ""),
+                        "message": str(args.get("message", "") or ""),
+                        "confirm": bool(args.get("confirm", False)),
+                    }
+                    if args.get("pick") is not None:
+                        wa_args["pick"] = args.get("pick")
+                    tools_executed.append(f"whatsapp_send: {wa_args['to_raw'][:40]}")
+                    res = await _execute_tool_raw("whatsapp_send", dict(wa_args, _from_mini_agent=True))
+                    last_result = res.get("message") or res.get("error") or str(res)[:500]
+                    execution_trace.append({
+                        "attempt": step,
+                        "tool": "whatsapp_send",
+                        "command": wa_args["to_raw"][:80],
+                        "exit_code": 0 if res.get("status") in ("sent", "needs_confirm", "needs_pick") else 1,
+                        "stdout": last_result,
+                        "stderr": "",
+                        "status": "success" if res.get("status") in ("sent", "needs_confirm", "needs_pick") else "failed",
+                    })
+                    messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                    messages.append({"role": "user", "content": f"Tool whatsapp_send result:\n{last_result}\nAnswer the user now using this result."})
+                    continue
                 if tool_name == "write_to_focused_input":
                     text = str(args.get("text") or "").strip()
                     if not text:
@@ -596,6 +651,112 @@ async def run_local_mini_agent(prompt: str) -> dict:
     }
 
 
+# --- WhatsApp deterministic path (overlay + mini agent) ---
+# The local model sometimes refuses WhatsApp sends ("I can't send WhatsApp").
+# These helpers bypass the model: parse the request, resolve via NLP scores,
+# confirm, then execute via wacli. No invention, no refusal.
+
+_WHATSAPP_PREVIEW_TAG = "[WHATSAPP_PREVIEW]"
+_WHATSAPP_SENT_TAG = "[WHATSAPP_SENT]"
+
+_AFFIRM_RE = re.compile(r"^(yes|yeah|yep|sure|ok|okay|confirm|send it|yes send it|do it|go ahead|please send)[\s.!]*$", re.IGNORECASE)
+
+_WHATSAPP_PATTERNS = [
+    # send message to kunal "hii" / send whatsapp message to mom 'hello'
+    re.compile(r"send\s+(?:a\s+)?(?:whatsapp\s+)?message\s+to\s+(?:a\s+|an\s+|the\s+)?(?P<to>[A-Za-z0-9_+\-.\s]{1,60}?)\s+[\"'“”](?P<msg>.+?)[\"'“”]\s*$", re.IGNORECASE | re.DOTALL),
+    # send whatsapp to kunal hii / send whatsapp message to kunal hii
+    re.compile(r"send\s+(?:a\s+)?whatsapp\s+(?:message\s+)?to\s+(?:a\s+|an\s+|the\s+)?(?P<to>[A-Za-z0-9_+\-.]+)\s+(?P<msg>.+?)\s*$", re.IGNORECASE | re.DOTALL),
+    # message kunal on whatsapp hii
+    re.compile(r"(?:message|text|ping)\s+(?P<to>[A-Za-z0-9_+\-.]+)\s+on\s+whatsapp\s+(?P<msg>.+?)\s*$", re.IGNORECASE | re.DOTALL),
+]
+
+
+def _parse_whatsapp_request(prompt: str) -> tuple[str, str] | None:
+    text = (prompt or "").strip()
+    if not text or "whatsapp" not in text.lower() and "message to" not in text.lower():
+        # still try patterns (covers "send message to kunal ...")
+        pass
+    for pat in _WHATSAPP_PATTERNS:
+        m = pat.search(text)
+        if m:
+            to_raw = (m.group("to") or "").strip().strip("\"'“” ")
+            msg = (m.group("msg") or "").strip().strip("\"'“” ")
+            if to_raw and msg:
+                return to_raw, msg
+    return None
+
+
+def _is_affirmation(prompt: str) -> bool:
+    return bool(_AFFIRM_RE.match((prompt or "").strip()))
+
+
+def _find_pending_whatsapp(history: list | None) -> tuple[str, str, str] | None:
+    """Scan history for last confirm preview. Returns (matched, phone, message)."""
+    for turn in reversed(history or []):
+        content = str(turn.get("content", "") or "")
+        if _WHATSAPP_PREVIEW_TAG not in content:
+            continue
+        pm = re.search(r"\((\+\d{8,15})", content)
+        mm = re.search(r'Message:\s*["“”](.+?)["“”]\s*(?:\n|$)', content, re.DOTALL)
+        nm = re.search(r"Send WhatsApp to\s+(.+?)\s*\(", content)
+        if pm and mm:
+            return ((nm.group(1).strip() if nm else pm.group(1)), pm.group(1), mm.group(1).strip())
+    return None
+
+
+def _whatsapp_preview_text(matched: str, phone: str, score: float, message: str) -> str:
+    return (
+        f"{_WHATSAPP_PREVIEW_TAG}\n"
+        f"Send WhatsApp to {matched} ({phone}, score {score}%)?\n"
+        f'Message: "{message}"\n'
+        f"Reply YES to confirm."
+    )
+
+
+async def _handle_whatsapp_prompt(prompt: str, history: list | None, hw_info: dict) -> dict | None:
+    """Deterministic WhatsApp flow. Returns response dict or None when N/A."""
+    from . import whatsapp as _wa
+    from .whatsapp_contacts import resolve_contact
+
+    # 1) Affirmation completes a pending preview from history
+    if _is_affirmation(prompt):
+        pending = _find_pending_whatsapp(history)
+        if not pending:
+            return None
+        matched, phone, message = pending
+        if not _wa.is_installed():
+            out = "wacli is not installed. Install wacli (github.com/openclaw/wacli), then Pair in Settings → WhatsApp."
+            return {"status": "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
+        st = _wa.get_status()
+        if not st.get("paired"):
+            out = "WhatsApp is not linked. Open Settings → WhatsApp → Pair / Show QR and scan with your phone, then say YES again."
+            return {"status": "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
+        res = await asyncio.to_thread(_wa.send_text, phone, message)
+        if res.get("status") == "sent":
+            out = f"{_WHATSAPP_SENT_TAG} Sent WhatsApp to {matched} ({phone})."
+        else:
+            out = f"WhatsApp send failed: {res.get('error', 'unknown error')}"
+        return {"status": "success" if res.get("status") == "sent" else "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
+
+    # 2) New WhatsApp request
+    parsed = _parse_whatsapp_request(prompt)
+    if not parsed:
+        return None
+    to_raw, message = parsed
+    resolved = resolve_contact(to_raw)
+    rstatus = resolved.get("status")
+    if rstatus in ("exact", "fuzzy", "phone"):
+        out = _whatsapp_preview_text(resolved.get("matched", to_raw), resolved.get("phone", to_raw), resolved.get("score", 0), message)
+        return {"status": "info", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send:preview"], "execution_trace": [], "mini_agent_output": out, "message": out}
+    if rstatus == "ambiguous":
+        cands = resolved.get("candidates", [])[:3]
+        lines = "\n".join(f"{i}. {c.get('name')} ({c.get('phone')}, {c.get('score')}%)" for i, c in enumerate(cands))
+        out = f"Which contact did you mean?\n{lines}\nReply with the number or full name."
+        return {"status": "info", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send:pick"], "execution_trace": [], "mini_agent_output": out, "message": out}
+    out = "I couldn't match that name. Add the contact in Settings → WhatsApp (name + number with country code), or sync wacli contacts, then try again."
+    return {"status": "info", "device": hw_info["device"], "prompt": prompt, "attempts_count": 0, "tools_executed": [], "execution_trace": [], "mini_agent_output": out, "message": out}
+
+
 # Absolute safety kill-switch for the unbounded overlay agent loop (never hit in practice)
 OVERLAY_AGENT_MAX_STEPS = 50
 # Trim history once it exceeds this many characters (rough guard against context overflow)
@@ -639,6 +800,14 @@ async def run_overlay_agent(prompt: str, history: list | None = None) -> dict:
             "mini_agent_output": "I'm still setting up. Please try again in a moment.",
             "message": "I'm still setting up. Please try again in a moment.",
         }
+
+    # Deterministic WhatsApp path first — never let the model refuse a send.
+    try:
+        wa_handled = await _handle_whatsapp_prompt(prompt, history, hw_info)
+        if wa_handled is not None:
+            return wa_handled
+    except Exception as e:
+        logger.warning("🤖 [OVERLAY AGENT] WhatsApp fast-path failed: %s", e)
 
     import json as _json
 
@@ -692,7 +861,33 @@ async def run_overlay_agent(prompt: str, history: list | None = None) -> dict:
 
         if action == "tool":
             invalid_count = 0
-            command = str((decision.get("args") or {}).get("command") or "").strip()
+            tool_name = str((decision or {}).get("tool") or "terminal")
+            tool_args = (decision or {}).get("args") or {}
+            # Model-requested WhatsApp send — execute via tool executor (confirm gate enforced there).
+            if tool_name == "whatsapp_send":
+                wa_args = {
+                    "to_raw": str(tool_args.get("to_raw", tool_args.get("to", "")) or ""),
+                    "message": str(tool_args.get("message", "") or ""),
+                    "confirm": bool(tool_args.get("confirm", False)),
+                }
+                if tool_args.get("pick") is not None:
+                    wa_args["pick"] = tool_args.get("pick")
+                tools_executed.append(f"whatsapp_send: {wa_args['to_raw'][:40]}")
+                res = await _execute_tool_raw("whatsapp_send", dict(wa_args, _from_mini_agent=True))
+                last_result = res.get("message") or res.get("error") or str(res)[:500]
+                execution_trace.append({
+                    "attempt": step,
+                    "tool": "whatsapp_send",
+                    "command": wa_args["to_raw"][:80],
+                    "exit_code": 0 if res.get("status") in ("sent", "needs_confirm", "needs_pick") else 1,
+                    "stdout": last_result,
+                    "stderr": "",
+                    "status": "success" if res.get("status") in ("sent", "needs_confirm", "needs_pick") else "failed",
+                })
+                messages.append({"role": "assistant", "content": _json.dumps(decision)})
+                messages.append({"role": "user", "content": f"Tool whatsapp_send result:\n{last_result}\nAnswer the user now using this result."})
+                continue
+            command = str(tool_args.get("command") or "").strip()
             if not command:
                 messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
                 messages.append({"role": "user", "content": "That tool call was empty. Call a tool properly or answer."})

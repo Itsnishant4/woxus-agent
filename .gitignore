@@ -57,3 +57,4 @@ yarn-error.log*
 # self-hosted GitHub Actions runner
 actions-runner/
 actions-runner-arm64/
+.vercel

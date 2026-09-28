@@ -137,3 +137,14 @@ class BugReportSubmit(BaseModel):
     image: str | None = None  # base64 data URL (validated < 2 MB)
     hardware_id: str | None = None
     app_version: str | None = None
+
+class WhatsappSendRequest(BaseModel):
+    to: str
+    message: str
+    confirm: bool = False
+    pick: int | None = None
+
+class WhatsappStatusResponse(BaseModel):
+    installed: bool
+    paired: bool
+    status: str

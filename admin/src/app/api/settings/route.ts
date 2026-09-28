@@ -20,7 +20,7 @@ const DESCRIPTIONS: Record<string, string> = {
 const VALIDATORS: Record<string, (v: string) => string | null> = {
   trial_duration_seconds: (v) => {
     const n = parseInt(v);
-    if (isNaN(n) || n < 60 || n > 86400) return "Must be 60-86400 seconds";
+    if (isNaN(n) || n < 60) return "Must be at least 60 seconds (no maximum)";
     return null;
   },
   price_monthly: (v) => {

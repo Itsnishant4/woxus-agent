@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   verifyLicense: (licenseKey: string) => ipcRenderer.invoke('license:verify', licenseKey),
   getLicenseStatus: () => ipcRenderer.invoke('license:get-status'),
   getTrialStatus: () => ipcRenderer.invoke('trial:status'),
+  getTrialDuration: () => ipcRenderer.invoke('trial:get-duration'),
   startTrial: (email: string) => ipcRenderer.invoke('trial:start', email),
   submitFeedback: (rating: number, text: string) => ipcRenderer.invoke('feedback:submit', rating, text),
 

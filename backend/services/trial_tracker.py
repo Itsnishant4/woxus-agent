@@ -86,7 +86,9 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
     # to devices. Offline → local calculation as before.
     if hardware_id in trials:
         existing = trials[hardware_id]
-        api_res = _register_trial_with_api(hardware_id, email, device_info, existing["total_seconds"])
+        # Send the CURRENT global duration (not the stale local total) so the
+        # server row heals to the admin setting and the device follows.
+        api_res = _register_trial_with_api(hardware_id, email, device_info, total_seconds)
         if api_res and api_res.get("exists"):
             if not api_res.get("active"):
                 return {

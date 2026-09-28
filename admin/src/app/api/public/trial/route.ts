@@ -19,10 +19,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (existing) {
+      // Trial duration is global (admin setting). Devices always send the
+      // current global value — adopt it so stale rows (created under an old
+      // setting) heal automatically on next app start. No per-user override.
+      const incoming = trialDurationSeconds || 600;
+      if (existing.trialDurationSeconds !== incoming) {
+        existing.trialDurationSeconds = incoming;
+        await existing.save();
+      }
       return NextResponse.json({
         exists: true,
         active: existing.trialActive || false,
-        total_seconds: existing.trialDurationSeconds || 600,
+        total_seconds: incoming,
         trial_started_at: existing.trialStartedAt || null,
         email: existing.email || "",
       });

@@ -11,9 +11,11 @@ from google.genai import types
 delegate_task_declaration = types.FunctionDeclaration(
     name="delegate_task_to_mini_agent",
     description=(
-        "Delegate any command, project creation, terminal action, build, or file operation to the Local Mini Agent. "
+        "Delegate ONE command, project creation, terminal action, build, or file operation to the Local Mini Agent. "
         "The Main Agent DOES NOT execute terminal commands directly — it MUST delegate ALL tasks to the Local Mini Agent. "
-        "Provide a detailed task_prompt describing what the Local Mini Agent should execute."
+        "Provide a detailed task_prompt describing what the Local Mini Agent should execute. "
+        "For SEVERAL INDEPENDENT tasks at once, use delegate_tasks_to_mini_agent instead. "
+        "While a task runs, the user can keep talking — new tasks start immediately in parallel."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,
@@ -22,8 +24,74 @@ delegate_task_declaration = types.FunctionDeclaration(
                 type=types.Type.STRING,
                 description="The detailed task or command prompt for the Local Mini Agent to execute.",
             ),
+            "label": types.Schema(
+                type=types.Type.STRING,
+                description="Short label (e.g. 'create folder X') used when reporting progress.",
+            ),
         },
         required=["task_prompt"],
+    ),
+)
+
+delegate_tasks_declaration = types.FunctionDeclaration(
+    name="delegate_tasks_to_mini_agent",
+    description=(
+        "Delegate SEVERAL INDEPENDENT tasks at once (e.g. 'create folder X and send a file') — they run in parallel "
+        "in the background (bounded, overflow waits queued). Use when the user asks for multiple things in one breath. "
+        "Each item needs a short label and a detailed task_prompt. Dependent steps that must run in order go in ONE task_prompt instead."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "tasks": types.Schema(
+                type=types.Type.ARRAY,
+                description="Independent tasks to run in parallel.",
+                items=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "label": types.Schema(
+                            type=types.Type.STRING,
+                            description="Short label for progress reports.",
+                        ),
+                        "task_prompt": types.Schema(
+                            type=types.Type.STRING,
+                            description="Detailed prompt for the Local Mini Agent.",
+                        ),
+                    },
+                    required=["task_prompt"],
+                ),
+            ),
+            "timeout_seconds": types.Schema(
+                type=types.Type.INTEGER,
+                description="Max seconds to wait per task (default 300).",
+                default=300,
+            ),
+        },
+        required=["tasks"],
+    ),
+)
+
+mini_task_status_declaration = types.FunctionDeclaration(
+    name="mini_task_status",
+    description="Check one delegated mini-agent task by ID. Returns queued/running/done/failed plus result.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "task_id": types.Schema(
+                type=types.Type.STRING,
+                description="mini_task_id from a delegation interim response.",
+            ),
+        },
+        required=["task_id"],
+    ),
+)
+
+mini_task_list_declaration = types.FunctionDeclaration(
+    name="mini_task_list",
+    description="List recent delegated mini-agent tasks with states. Use to report on parallel work.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={},
     ),
 )
 
@@ -194,10 +262,10 @@ memory_delete_declaration = types.FunctionDeclaration(
 whatsapp_send_declaration = types.FunctionDeclaration(
     name="whatsapp_send",
     description=(
-        "Send WhatsApp message via wacli linked device. "
-        "Args: to_raw (verbatim name/phone from user), message, confirm (default false), pick (index when ambiguous). "
-        "First call with confirm=false returns preview with NLP score/matched name. "
-        "Only recall with confirm=true after user says yes. Never invent numbers."
+        "Send WhatsApp message via wacli linked device immediately. "
+        "Args: to_raw (verbatim name/phone from user), message, pick (index when ambiguous). "
+        "Resolves the name via NLP scores and sends at once — no confirmation step. "
+        "Returns sent/needs_pick/unknown_recipient/needs_login. Never invent numbers."
     ),
     parameters=types.Schema(
         type=types.Type.OBJECT,
@@ -212,8 +280,8 @@ whatsapp_send_declaration = types.FunctionDeclaration(
             ),
             "confirm": types.Schema(
                 type=types.Type.BOOLEAN,
-                description="True only after user confirmed recipient + text.",
-                default=False,
+                description="Legacy, ignored — sends always execute immediately.",
+                default=True,
             ),
             "pick": types.Schema(
                 type=types.Type.INTEGER,
@@ -234,6 +302,9 @@ whatsapp_send_declaration = types.FunctionDeclaration(
 agent_tools = [
     types.Tool(function_declarations=[
         delegate_task_declaration,
+        delegate_tasks_declaration,
+        mini_task_status_declaration,
+        mini_task_list_declaration,
         memory_create_declaration,
         memory_list_declaration,
         whatsapp_send_declaration,

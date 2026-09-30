@@ -112,8 +112,13 @@ async def handle_tool_call(name: str, args: dict) -> dict:
                     "status": "skipped",
                     "message": "Task already completed — nothing to delegate.",
                 }
-            from .local_model import run_local_mini_agent
-            return await run_local_mini_agent(task_prompt)
+            return await _delegate_single(task_prompt, args.get("label"))
+        elif name == "delegate_tasks_to_mini_agent":
+            return await _delegate_fan_out(args)
+        elif name == "mini_task_status":
+            return _mini_task_status(args)
+        elif name == "mini_task_list":
+            return _mini_task_list(args)
         elif name == "terminal_exec":
             return await _terminal_exec(args)
         elif name == "terminal_status":
@@ -141,6 +146,89 @@ async def handle_tool_call(name: str, args: dict) -> dict:
     except Exception as e:
         logger.exception("Tool %s failed", name)
         return {"error": str(e)}
+
+
+# --- Mini-agent delegation (parallel registry) ---
+
+def submit_delegation(task_prompt: str, label: str | None = None):
+    """Register a mini task and return it immediately (runs in background).
+    The caller awaits it later via await_mini_task(task_id)."""
+    from .mini_tasks import get_mini_task_manager
+
+    return get_mini_task_manager().submit(label or task_prompt[:60], task_prompt, _run_mini_task)
+
+
+async def _run_mini_task(task) -> dict:
+    """Runner executed inside the mini-task semaphore slot."""
+    from .local_model import run_local_mini_agent
+
+    return await run_local_mini_agent(task.prompt)
+
+
+async def _delegate_single(task_prompt: str, label: str | None = None, timeout: float | None = 300) -> dict:
+    """Register a mini task and wait for it. Direct callers (overlay) block;
+    the voice path submits first and awaits in background so speech stays free."""
+    from .mini_tasks import await_mini_task
+
+    task = submit_delegation(task_prompt, label)
+    res = await await_mini_task(task.task_id, timeout=timeout)
+    res["mini_task_id"] = task.task_id
+    return res
+
+
+async def _delegate_fan_out(args: dict) -> dict:
+    """Run several independent mini-agent tasks concurrently (bounded by the
+    mini-task cap; overflow waits queued). Returns per-task results."""
+    from .mini_tasks import await_mini_task, get_mini_task_manager
+
+    items = args.get("tasks") or []
+    if not isinstance(items, list) or not items:
+        return {"error": "tasks must be a non-empty list of {label, task_prompt}"}
+    items = items[:50]
+    timeout = min(float(args.get("timeout_seconds", 300)), 900)
+
+    mgr = get_mini_task_manager()
+    submitted = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        prompt = str(item.get("task_prompt", "") or "").strip()
+        if not prompt or "output" in item:
+            continue
+        label = str(item.get("label", "") or prompt[:60])
+        submitted.append(mgr.submit(label, prompt, _run_mini_task))
+    if not submitted:
+        return {"error": "no valid tasks (need task_prompt per item)"}
+
+    results = await asyncio.gather(*[await_mini_task(t.task_id, timeout=timeout) for t in submitted])
+    done = sum(1 for t in submitted if mgr.get(t.task_id) and mgr.get(t.task_id).state == "done")
+    return {
+        "status": "done",
+        "completed": done,
+        "total": len(submitted),
+        "tasks": [
+            {"mini_task_id": t.task_id, "label": t.label, **r}
+            for t, r in zip(submitted, results)
+        ],
+    }
+
+
+def _mini_task_status(args: dict) -> dict:
+    from .mini_tasks import get_mini_task_manager
+
+    task = get_mini_task_manager().get(str(args.get("task_id", "")))
+    if not task:
+        return {"error": f"No mini task found: {args.get('task_id')}"}
+    d = task.to_dict()
+    d["result"] = task.result
+    return d
+
+
+def _mini_task_list(args: dict) -> dict:
+    from .mini_tasks import get_mini_task_manager
+
+    tasks = get_mini_task_manager().list()[:20]
+    return {"tasks": [t.to_dict() for t in tasks], "count": len(tasks)}
 
 
 # --- Terminal ---
@@ -284,7 +372,6 @@ def _write_to_focused_input(args: dict) -> dict:
 async def _whatsapp_send(args: dict) -> dict:
     to_raw = str(args.get("to_raw", args.get("to", "")) or "").strip()
     message = str(args.get("message", "") or "").strip()
-    confirm = bool(args.get("confirm", False))
     pick = args.get("pick")
     if not to_raw or not message:
         return {"error": "to_raw and message required"}
@@ -294,7 +381,7 @@ async def _whatsapp_send(args: dict) -> dict:
     except Exception as e:
         return {"error": f"whatsapp backend unavailable: {e}"}
 
-    # explicit pick path
+    # explicit pick path — send at once
     if pick is not None:
         preview = resolve_contact(to_raw)
         cands = preview.get("candidates", [])
@@ -303,22 +390,15 @@ async def _whatsapp_send(args: dict) -> dict:
             to_send = chosen.get("phone", to_raw)
         except Exception:
             return {"error": "invalid pick index", "candidates": cands}
-        if not confirm:
-            return {"status": "needs_confirm", "matched": chosen.get("name"), "phone": to_send, "score": chosen.get("score")}
-        return await wa.send_text_async(to_send, message)
+        res = await wa.send_text_async(to_send, message)
+        if isinstance(res, dict):
+            res["matched"] = chosen.get("name", to_send)
+        return res
 
     resolved = resolve_contact(to_raw)
     status = resolved.get("status")
     if status in ("exact", "fuzzy", "phone"):
         to_send = resolved.get("phone", to_raw)
-        if not confirm:
-            return {
-                "status": "needs_confirm",
-                "matched": resolved.get("matched", to_send),
-                "phone": to_send,
-                "score": resolved.get("score"),
-                "alternatives": resolved.get("alternatives", []),
-            }
         res = await wa.send_text_async(to_send, message)
         if isinstance(res, dict):
             res["nlp_score"] = resolved.get("score")

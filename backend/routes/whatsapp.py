@@ -42,8 +42,9 @@ async def whatsapp_status():
 
 
 @router.post("/pair/start")
-async def pair_start():
-    return whatsapp.pair_start()
+async def pair_start(body: dict | None = None):
+    phone = (body or {}).get("phone") if isinstance(body, dict) else None
+    return whatsapp.pair_start(phone)
 
 
 @router.get("/pair/qr")
@@ -54,6 +55,16 @@ async def pair_qr():
 @router.post("/pair/cancel")
 async def pair_cancel():
     return whatsapp.pair_cancel()
+
+
+@router.post("/install")
+async def install_wacli():
+    return whatsapp.start_install()
+
+
+@router.get("/install/status")
+async def install_status():
+    return whatsapp.install_status()
 
 
 @router.post("/logout")
@@ -100,7 +111,7 @@ async def whatsapp_send(body: WhatsappSendBody):
     if not to_raw or not msg:
         raise HTTPException(400, "to and message required")
 
-    # pick N from ambiguous candidates
+    # pick N from ambiguous candidates — sends at once
     if body.pick is not None:
         preview = resolve_contact(to_raw)
         cands = preview.get("candidates", [])
@@ -109,23 +120,15 @@ async def whatsapp_send(body: WhatsappSendBody):
             to_send = chosen.get("phone", to_raw)
         except Exception:
             raise HTTPException(400, "invalid pick index")
-        if not body.confirm:
-            return {"status": "needs_confirm", "matched": chosen.get("name"), "phone": to_send, "score": chosen.get("score")}
         result = await whatsapp.send_text_async(to_send, msg)
+        if isinstance(result, dict):
+            result["matched"] = chosen.get("name", to_send)
         return result
 
     resolved = resolve_contact(to_raw)
     status = resolved.get("status")
     if status in ("exact", "fuzzy", "phone"):
         to_send = resolved.get("phone", to_raw)
-        if not body.confirm:
-            return {
-                "status": "needs_confirm",
-                "matched": resolved.get("matched", to_send),
-                "phone": to_send,
-                "score": resolved.get("score"),
-                "alternatives": resolved.get("alternatives", []),
-            }
         result = await whatsapp.send_text_async(to_send, msg)
         # attach NLP score for audit
         if isinstance(result, dict):

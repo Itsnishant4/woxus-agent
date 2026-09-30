@@ -738,7 +738,7 @@ async def _handle_whatsapp_prompt(prompt: str, history: list | None, hw_info: di
             out = f"WhatsApp send failed: {res.get('error', 'unknown error')}"
         return {"status": "success" if res.get("status") == "sent" else "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
 
-    # 2) New WhatsApp request
+    # 2) New WhatsApp request — resolve via NLP and send immediately (no confirm).
     parsed = _parse_whatsapp_request(prompt)
     if not parsed:
         return None
@@ -746,8 +746,21 @@ async def _handle_whatsapp_prompt(prompt: str, history: list | None, hw_info: di
     resolved = resolve_contact(to_raw)
     rstatus = resolved.get("status")
     if rstatus in ("exact", "fuzzy", "phone"):
-        out = _whatsapp_preview_text(resolved.get("matched", to_raw), resolved.get("phone", to_raw), resolved.get("score", 0), message)
-        return {"status": "info", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send:preview"], "execution_trace": [], "mini_agent_output": out, "message": out}
+        to_send = resolved.get("phone", to_raw)
+        matched = resolved.get("matched", to_raw)
+        if not _wa.is_installed():
+            out = "wacli is not installed. Install it in Settings → WhatsApp first."
+            return {"status": "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
+        st = _wa.get_status()
+        if not st.get("paired"):
+            out = "WhatsApp is not linked. Open Settings → WhatsApp → Pair / Show QR and scan with your phone first."
+            return {"status": "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
+        res = await asyncio.to_thread(_wa.send_text, to_send, message)
+        if res.get("status") == "sent":
+            out = f"{_WHATSAPP_SENT_TAG} Sent WhatsApp to {matched} ({to_send})."
+        else:
+            out = f"WhatsApp send failed: {res.get('error', 'unknown error')}"
+        return {"status": "success" if res.get("status") == "sent" else "failed", "device": hw_info["device"], "prompt": prompt, "attempts_count": 1, "tools_executed": ["whatsapp_send"], "execution_trace": [], "mini_agent_output": out, "message": out}
     if rstatus == "ambiguous":
         cands = resolved.get("candidates", [])[:3]
         lines = "\n".join(f"{i}. {c.get('name')} ({c.get('phone')}, {c.get('score')}%)" for i, c in enumerate(cands))

@@ -32,6 +32,14 @@ async def lifespan(app: FastAPI):
     # memory where it stays resident (nano_inference caches it as a singleton).
     asyncio.create_task(_preload_mini_agent_model())
     yield
+    # Terminate any running WhatsApp pairing proc so restarts don't orphan a
+    # `wacli auth` holding the store lock (stale QRs thereafter never scan).
+    try:
+        from .services import whatsapp as _wa
+
+        _wa.pair_cancel()
+    except Exception:
+        pass
     logging.info("Woxus backend shutting down.")
 
 

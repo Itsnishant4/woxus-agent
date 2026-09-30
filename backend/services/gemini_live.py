@@ -362,6 +362,18 @@ class GeminiLiveService:
                             )
                             logger.info("Replayed %d history turn(s)", len(turns))
                         continue
+                    if isinstance(item, tuple) and item[0] == "system_result":
+                        # A background mini task finished — nudge the model so
+                        # it announces the completion (speak-when-done). Sent
+                        # as a system-prefixed user turn; not added to the
+                        # conversation log history.
+                        note = str(item[1] or "").strip()
+                        if note:
+                            logger.info("Announcing background completion to voice")
+                            await session.send_realtime_input(
+                                text="[System notice — a background task finished] " + note
+                            )
+                        continue
                     text = item[1] if isinstance(item, tuple) else item
                     if isinstance(item, tuple) and item[0] == "text":
                         self._append_to_log("user", text)
@@ -494,6 +506,54 @@ class GeminiLiveService:
                 if audio_interrupt_callback:
                     await audio_interrupt_callback()
 
+        async def heartbeat():
+            """Prove the event loop stays responsive while mini-agent tasks
+            run (local inference must never starve voice). Logs drift >2s."""
+            try:
+                while self._running:
+                    tick = time.time()
+                    await asyncio.sleep(1.0)
+                    drift = time.time() - tick - 1.0
+                    if drift > 2.0:
+                        logger.warning("💓 [HEARTBEAT] event loop stalled %.1fs — voice may feel frozen", drift)
+            except asyncio.CancelledError:
+                pass
+
+        async def _announce_completed(task_ids: list[str], fn_name: str):
+            """Wait for mini tasks, forward results to frontend, then inject a
+            system turn so voice announces completions (speak-when-done) even
+            mid-conversation. Each task announces once."""
+            from .mini_tasks import await_mini_task, get_mini_task_manager
+
+            mgr = get_mini_task_manager()
+            summaries = []
+            for tid in task_ids:
+                try:
+                    res = await await_mini_task(tid, timeout=None)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    res = {"error": str(e)}
+                task = mgr.get(tid)
+                label = (task.label if task else tid)[:60]
+                if task:
+                    task.announced = True
+                if tool_result_callback:
+                    try:
+                        await tool_result_callback(fn_name, {"mini_task_id": tid, "label": label, **res})
+                    except Exception as e:
+                        logger.debug("tool_result_callback failed: %s", e)
+                line = res.get("message") or res.get("mini_agent_output") or res.get("error") or res.get("status") or "done"
+                summaries.append(f"'{label}': {str(line)[:200]}")
+            if summaries:
+                note = "Background task(s) finished — " + "; ".join(summaries) + ". Announce briefly."
+                try:
+                    text_input_queue.put_nowait(("system_result", note))
+                except Exception:
+                    pass
+            for tid in task_ids:
+                self._bg_tool_tasks.discard(asyncio.current_task())
+
         async def _run_tool_background(fn_name: str, fn_args: dict, fn_id: str):
             """Run a delegated tool (mini agent task) without blocking the
             Gemini receive loop. When it finishes, push the result to the
@@ -521,24 +581,73 @@ class GeminiLiveService:
                 logger.info("Tool call: %s(%s) [id=%s]", fn_name, fn_args, fn_id)
 
                 if fn_name == "delegate_task_to_mini_agent":
-                    # Non-blocking: ack Gemini immediately with an interim
-                    # response so it can keep talking to the user, and run the
-                    # actual (slow) mini-agent task in the background. The real
-                    # result is delivered to the frontend when done via
-                    # tool_result_callback — Gemini is never left hanging.
+                    # Non-blocking: register first so the interim reply carries
+                    # the task ID, ack Gemini immediately so it can keep talking
+                    # (voice stays free), and run the slow mini-agent work in
+                    # the background. Completion is announced back into the
+                    # voice session — never left hanging.
+                    from .tool_executor import submit_delegation
+
+                    task_prompt = str(fn_args.get("task_prompt") or "").strip()
+                    if not task_prompt or "output" in fn_args:
+                        responses.append(types.FunctionResponse(
+                            name=fn_name,
+                            id=fn_id,
+                            response={"output": {
+                                "status": "skipped",
+                                "message": "Task already completed — nothing to delegate.",
+                            }},
+                        ))
+                        continue
+                    label = str(fn_args.get("label") or task_prompt[:60])
+                    task = submit_delegation(task_prompt, label)
                     responses.append(types.FunctionResponse(
                         name=fn_name,
                         id=fn_id,
                         response={"output": {
                             "status": "started",
+                            "mini_task_id": task.task_id,
                             "message": "On it — I'll let you know when it's done.",
                         }},
                     ))
-                    task = asyncio.create_task(
-                        _run_tool_background(fn_name, fn_args, fn_id)
-                    )
-                    self._bg_tool_tasks.add(task)
-                    task.add_done_callback(self._bg_tool_tasks.discard)
+                    bg = asyncio.create_task(_announce_completed([task.task_id], fn_name))
+                    self._bg_tool_tasks.add(bg)
+                    bg.add_done_callback(self._bg_tool_tasks.discard)
+                    continue
+
+                if fn_name == "delegate_tasks_to_mini_agent":
+                    # Parallel fan-out: register all tasks, ack once with IDs,
+                    # run concurrently, announce combined result.
+                    from .tool_executor import submit_delegation
+
+                    items = fn_args.get("tasks") or []
+                    items = [it for it in items if isinstance(it, dict) and str(it.get("task_prompt", "") or "").strip()][:50]
+                    if not items:
+                        responses.append(types.FunctionResponse(
+                            name=fn_name,
+                            id=fn_id,
+                            response={"output": {"error": "tasks must be a non-empty list of {label, task_prompt}"}},
+                        ))
+                        continue
+                    tids = []
+                    for it in items:
+                        t = submit_delegation(
+                            str(it["task_prompt"]).strip(),
+                            str(it.get("label") or it["task_prompt"][:60]),
+                        )
+                        tids.append(t.task_id)
+                    responses.append(types.FunctionResponse(
+                        name=fn_name,
+                        id=fn_id,
+                        response={"output": {
+                            "status": "started",
+                            "mini_task_ids": tids,
+                            "message": f"On {len(tids)} tasks in parallel — I'll report each as it lands.",
+                        }},
+                    ))
+                    bg = asyncio.create_task(_announce_completed(tids, fn_name))
+                    self._bg_tool_tasks.add(bg)
+                    bg.add_done_callback(self._bg_tool_tasks.discard)
                     continue
 
                 # Fast tools (read/status/memory) run inline — the conversation
@@ -576,7 +685,7 @@ class GeminiLiveService:
                     )
                     logger.info("Replayed %d conversation turn(s) after reconnect", len(turns))
 
-            await asyncio.gather(send_audio(), send_text(), receive())
+            await asyncio.gather(send_audio(), send_text(), receive(), heartbeat())
         except asyncio.CancelledError:
             raise
         except Exception as e:

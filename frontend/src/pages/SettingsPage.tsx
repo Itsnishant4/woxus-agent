@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, Switch, Separator } from '@heroui/react';
 import { Palette, Bell, Shield, Info, Monitor, Download, Loader2, CheckCircle2, XCircle, MessageCircle } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -227,15 +227,13 @@ function WhatsAppSection() {
   const API = `http://127.0.0.1:${resolveBackendPort()}/api`;
   const [status, setStatus] = useState<any>(null);
   const [qr, setQr] = useState<any>({ status: 'idle', qr_text: '' });
-  const [contacts, setContacts] = useState<Record<string, string>>({});
-  const [defaultCc, setDefaultCc] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [testTo, setTestTo] = useState('');
-  const [testMsg, setTestMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [pairPhone, setPairPhone] = useState('');
   const [QRComp, setQRComp] = useState<any>(null);
+  const [installing, setInstalling] = useState(false);
+  const [installLog, setInstallLog] = useState<string[]>([]);
+  const pollRef = useRef<any>(null);
 
   useEffect(() => {
     import('qrcode.react').then((m: any) => setQRComp(() => m.QRCodeSVG || m.default)).catch(() => {});
@@ -248,66 +246,100 @@ function WhatsAppSection() {
     return { 'Content-Type': 'application/json', 'X-License-Key': licenseKey, 'X-Hardware-Id': hwid };
   };
 
-  const load = async () => {
+  const load = async (retries = 1) => {
     try {
       const h = await authHeaders();
-      const [s, c] = await Promise.all([
-        fetch(`${API}/whatsapp/status`, { headers: h }).then((r) => r.json()),
-        fetch(`${API}/whatsapp/contacts`, { headers: h }).then((r) => r.json()),
-      ]);
+      const s = await fetch(`${API}/whatsapp/status`, { headers: h }).then((r) => r.json());
       setStatus(s);
-      setContacts(c.contacts || {});
-      setDefaultCc(c.default_country || '');
     } catch (e: any) {
-      setNote(e.message || 'load failed');
+      if (retries > 0) {
+        setTimeout(() => load(retries - 1), 3000);
+      } else {
+        setNote(e.message || 'load failed');
+      }
     }
   };
 
   useEffect(() => { load(); }, []);
 
-  const startPair = async () => {
-    setBusy(true); setNote('');
+  const startPair = async (phone?: string) => {
+    setBusy(true); setNote(''); setQr({ status: 'waiting', qr_text: '', pair_code: '' });
     try {
       const h = await authHeaders();
-      await fetch(`${API}/whatsapp/pair/start`, { method: 'POST', headers: h });
-      const poll = setInterval(async () => {
-        const hh = await authHeaders();
-        const q = await fetch(`${API}/whatsapp/pair/qr`, { headers: hh }).then((r) => r.json());
-        setQr(q);
-        if (q.status === 'paired' || q.paired) {
-          clearInterval(poll); setBusy(false);
-          setNote('WhatsApp linked. Syncing contacts…');
-          load();
-        }
-        if (q.status === 'error' || q.status === 'expired') {
-          clearInterval(poll); setBusy(false);
-          setNote(q.error || 'QR expired. Try Pair again.');
+      const started = await fetch(`${API}/whatsapp/pair/start`, { method: 'POST', headers: h, body: JSON.stringify(phone ? { phone } : {}) }).then((r) => r.json());
+      if (started.status === 'error') {
+        setBusy(false);
+        setNote(started.error || 'Could not start pairing. Is wacli installed?');
+        return;
+      }
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = setInterval(async () => {
+        try {
+          const hh = await authHeaders();
+          const q = await fetch(`${API}/whatsapp/pair/qr`, { headers: hh }).then((r) => r.json());
+          setQr(q);
+          if (q.status === 'paired' || q.paired) {
+            if (pollRef.current) clearInterval(pollRef.current);
+            setBusy(false);
+            setNote('WhatsApp linked. Syncing contacts…');
+            load();
+          }
+          if (q.status === 'error' || q.status === 'expired') {
+            if (pollRef.current) clearInterval(pollRef.current);
+            setBusy(false);
+            setNote(q.error || 'QR expired. Tap Pair again for a fresh code.');
+          }
+        } catch (e: any) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setBusy(false);
+          setNote('Lost connection to backend. Is it running?');
         }
       }, 2000);
-      setTimeout(() => { clearInterval(poll); setBusy(false); }, 180000);
-    } catch (e: any) { setBusy(false); setNote(e.message); }
+      setTimeout(() => {
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        setBusy((b) => {
+          if (b) setNote('Timed out waiting for scan. Tap Pair again for a fresh QR.');
+          return false;
+        });
+      }, 180000);
+    } catch (e: any) { setBusy(false); setNote(e.message || 'Could not reach backend.'); }
   };
 
-  const saveContacts = async () => {
+  const cancelPair = async () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     try {
       const h = await authHeaders();
-      await fetch(`${API}/whatsapp/contacts`, { method: 'PUT', headers: h, body: JSON.stringify({ whatsapp_contacts: contacts, whatsapp_default_country: defaultCc }) });
-      setNote('Contacts saved. Voice NLP uses nearest-name scores.');
-    } catch (e: any) { setNote(e.message); }
+      await fetch(`${API}/whatsapp/pair/cancel`, { method: 'POST', headers: h });
+    } catch { /* ignore */ }
+    setBusy(false); setQr({ status: 'idle', qr_text: '' }); setNote('Pair cancelled.');
   };
 
-  const addContact = () => {
-    if (!name.trim() || !phone.trim()) return;
-    setContacts((c) => ({ ...c, [name.trim().toLowerCase()]: phone.trim() }));
-    setName(''); setPhone('');
-  };
-
-  const testSend = async (confirm: boolean) => {
+  const startInstall = async () => {
+    setInstalling(true); setInstallLog([]); setNote('');
     try {
       const h = await authHeaders();
-      const r = await fetch(`${API}/whatsapp/send`, { method: 'POST', headers: h, body: JSON.stringify({ to: testTo, message: testMsg, confirm }) }).then((r) => r.json());
-      setNote(JSON.stringify(r).slice(0, 400));
-    } catch (e: any) { setNote(e.message); }
+      await fetch(`${API}/whatsapp/install`, { method: 'POST', headers: h });
+      const poll = setInterval(async () => {
+        try {
+          const hh = await authHeaders();
+          const st = await fetch(`${API}/whatsapp/install/status`, { headers: hh }).then((r) => r.json());
+          setInstallLog(st.log || []);
+          if (st.status === 'done') {
+            clearInterval(poll); setInstalling(false);
+            setNote(`wacli installed${st.version ? `: ${st.version}` : ''}. Now tap Pair / Show QR.`);
+            load();
+          }
+          if (st.status === 'error') {
+            clearInterval(poll); setInstalling(false);
+            setNote('Install failed — see log. Manual fallback: brew install openclaw/tap/wacli');
+          }
+        } catch {
+          clearInterval(poll); setInstalling(false);
+          setNote('Lost connection during install.');
+        }
+      }, 2000);
+      setTimeout(() => { clearInterval(poll); setInstalling(false); }, 300000);
+    } catch (e: any) { setInstalling(false); setNote(e.message || 'Could not reach backend.'); }
   };
 
   const qrText = qr?.qr_text || '';
@@ -317,55 +349,56 @@ function WhatsAppSection() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-foreground">Status: {status ? `${status.status} ${status.paired ? '✓' : ''}` : '…'}</p>
-          <p className="text-xs text-muted-foreground">{status?.hint || 'wacli linked-device. Voice: send WhatsApp to <name> <text>.'}</p>
-        </div>
-        <button onClick={load} className="px-3 py-1.5 rounded-lg bg-accent text-xs font-medium">Refresh</button>
-      </div>
-      <div className="flex gap-2">
-        <button onClick={startPair} disabled={busy} className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium disabled:opacity-50">
-          {busy ? 'Waiting for scan…' : 'Pair / Show QR'}
-        </button>
-        <button onClick={async () => { const h = await authHeaders(); await fetch(`${API}/whatsapp/logout`, { method: 'POST', headers: h }); load(); }} className="px-4 py-2 rounded-lg bg-accent text-sm">Logout</button>
-      </div>
-      {showQR && (
-        <div className="rounded-lg border border-border p-4 space-y-2">
-          <p className="text-xs font-medium">Scan in WhatsApp → Linked devices → Link a device</p>
-          {QRComp && qrText.length < 1000 ? <QRComp value={qrText} size={220} /> : (
-            <pre className="text-[10px] whitespace-pre-wrap break-all bg-background border border-border rounded p-2 max-h-40 overflow-auto">{qrText}</pre>
+          <p className="text-sm font-medium text-foreground">Status: {status?.status ?? '…'}{status?.paired ? ' ✓' : ''}</p>
+          <p className="text-xs text-muted-foreground">{status?.hint || status?.error || 'Voice auto-matches names — just say "send WhatsApp to Kunal…".'}</p>
+          {typeof status?.contacts === 'number' && status.contacts > 0 && (
+            <p className="text-xs text-muted-foreground">{status.contacts} contact names synced for voice matching.</p>
           )}
-          <p className="text-[11px] text-muted-foreground">QR from terminal (wacli auth --qr-format text). Expires fast. If it fails, Pair again.</p>
+        </div>
+        <button onClick={() => load()} className="px-3 py-1.5 rounded-lg bg-accent text-xs font-medium">Refresh</button>
+      </div>
+      {status && status.installed === false && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+          <p className="text-sm font-medium text-foreground">wacli is not installed</p>
+          <p className="text-xs text-muted-foreground">One-click install downloads the official binary into ~/.woxus/bin. Manual fallback: <code className="font-mono">brew install openclaw/tap/wacli</code></p>
+          <button onClick={startInstall} disabled={installing} className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium disabled:opacity-50">
+            {installing ? 'Installing…' : 'Install wacli'}
+          </button>
+          {installLog.length > 0 && (
+            <pre className="text-[11px] whitespace-pre-wrap break-all bg-background border border-border rounded p-2 max-h-40 overflow-auto">{installLog.join('\n')}</pre>
+          )}
         </div>
       )}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Named contacts (NLP nearest-match)</p>
-        {Object.entries(contacts).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-2 text-sm">
-            <span className="flex-1">{k} → {v}</span>
-            <button onClick={() => setContacts((c) => { const n = { ...c }; delete n[k]; return n; })} className="text-xs text-red-500">remove</button>
+      <div className="flex gap-2">
+        <button onClick={() => startPair()} disabled={busy || status?.installed === false} className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium disabled:opacity-50">
+          {busy ? 'Waiting for scan…' : 'Pair / Show QR'}
+        </button>
+        {busy && (
+          <button onClick={cancelPair} className="px-4 py-2 rounded-lg bg-accent text-sm">Cancel</button>
+        )}
+        <button onClick={async () => { const h = await authHeaders(); await fetch(`${API}/whatsapp/logout`, { method: 'POST', headers: h }); load(); }} className="px-4 py-2 rounded-lg bg-accent text-sm">Logout</button>
+      </div>
+      <div className="flex gap-2 items-center">
+        <input value={pairPhone} onChange={(e) => setPairPhone(e.target.value)} placeholder="Can't scan? Your number: +919876543210" className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
+        <button onClick={() => startPair(pairPhone)} disabled={busy || status?.installed === false || !pairPhone.trim()} className="px-3 py-2 rounded-lg bg-accent text-sm font-medium disabled:opacity-50">Get code</button>
+      </div>
+      {qr?.pair_code && (
+        <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 p-4 space-y-1 text-center">
+          <p className="text-3xl font-mono font-bold tracking-widest text-foreground">{qr.pair_code}</p>
+          <p className="text-xs text-muted-foreground">On your phone: WhatsApp → Settings → Linked devices → Link with phone number instead → enter this code. Expires in ~60s.</p>
+        </div>
+      )}
+      {showQR && (
+        <div className="rounded-lg border border-border p-4 space-y-2">
+          <p className="text-xs font-medium">Scan in WhatsApp → Linked devices → Link a device{typeof qr?.elapsed === 'number' ? ` (${Math.round(qr.elapsed)}s)` : ''}</p>
+          <div className="bg-white inline-block rounded-lg p-3">
+            {QRComp && qrText.length < 1000 ? <QRComp value={qrText} size={260} bgColor="#FFFFFF" fgColor="#000000" marginSize={4} /> : (
+              <pre className="text-[10px] whitespace-pre-wrap break-all bg-white text-black rounded p-2 max-h-40 overflow-auto max-w-[280px]">{qrText}</pre>
+            )}
           </div>
-        ))}
-        <div className="flex gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name e.g. mom" className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+919876543210" className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
-          <button onClick={addContact} className="px-3 py-2 rounded-lg bg-violet-600 text-white text-sm">Add</button>
+          <p className="text-[11px] text-muted-foreground">Codes expire in about a minute. If scan fails, Cancel → Pair again — or use the code option above (no camera needed).</p>
         </div>
-        <div className="flex gap-2 items-center">
-          <input value={defaultCc} onChange={(e) => setDefaultCc(e.target.value)} placeholder="default country +91" className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
-          <button onClick={saveContacts} className="px-3 py-2 rounded-lg bg-accent text-sm">Save</button>
-        </div>
-      </div>
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Test send (confirm gate)</p>
-        <div className="flex gap-2">
-          <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="mom or +91..." className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
-          <input value={testMsg} onChange={(e) => setTestMsg(e.target.value)} placeholder="hello" className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => testSend(false)} className="px-3 py-2 rounded-lg bg-accent text-sm">Preview (score)</button>
-          <button onClick={() => testSend(true)} className="px-3 py-2 rounded-lg bg-violet-600 text-white text-sm">Send (confirm=true)</button>
-        </div>
-      </div>
+      )}
       {note && <p className="text-xs text-muted-foreground whitespace-pre-wrap break-all">{note}</p>}
     </div>
   );
@@ -434,7 +467,7 @@ const sections = [
   {
     id: 'whatsapp',
     title: 'WhatsApp',
-    description: 'Pair wacli, QR login, NLP contacts',
+    description: 'Pair wacli, QR login',
     icon: MessageCircle,
     content: <WhatsAppSection />,
   },

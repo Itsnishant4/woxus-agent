@@ -60,4 +60,5 @@ def load_config() -> dict[str, str]:
         "LOG_LEVEL": os.getenv("LOG_LEVEL", "INFO"),
         "LOG_DIR": os.getenv("LOG_DIR", str(_WOXUS_HOME / "logs")),
         "MONGODB_URI": os.getenv("MONGODB_URI", ""),
+        "MAX_PARALLEL_MINI_TASKS": os.getenv("MAX_PARALLEL_MINI_TASKS", "10"),
     }

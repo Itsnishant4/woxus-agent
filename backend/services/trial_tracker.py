@@ -1,10 +1,11 @@
 import json
 import logging
-import httpx
 from datetime import datetime
 
-from ..paths import woxus_data_dir
+import httpx
+
 from ..config import load_config
+from ..paths import woxus_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
         started = _parse_dt(existing["started_at"]) or datetime.utcnow()
         elapsed = (datetime.utcnow() - started).total_seconds()
         remaining = max(0, existing["total_seconds"] - elapsed)
-        
+
         logger.info(f"[TrialTracker] Found existing trial in local trials.json. Elapsed: {elapsed}s, Remaining: {remaining}s")
 
         if remaining > 0:
@@ -129,7 +130,7 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
 
     # Otherwise, register with the API
     api_res = _register_trial_with_api(hardware_id, email, device_info, total_seconds)
-    
+
     if api_res and api_res.get("exists"):
         if not api_res.get("active"):
             return {
@@ -139,7 +140,7 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
                 "email": api_res.get("email"),
             }
         total_seconds = api_res.get("total_seconds", total_seconds)
-    
+
     # Save the new trial to trials.json
     record = {
         "hardware_id": hardware_id,
@@ -174,9 +175,9 @@ def get_trial_status(hardware_id: str) -> dict:
     started = datetime.fromisoformat(rec["started_at"])
     elapsed = (datetime.utcnow() - started).total_seconds()
     remaining = max(0, rec["total_seconds"] - elapsed)
-    
+
     logger.info(f"[TrialTracker] Local trial check. Elapsed: {elapsed}s, Remaining: {remaining}s")
-    
+
     return {
         "active": remaining > 0,
         "remaining_seconds": int(remaining),

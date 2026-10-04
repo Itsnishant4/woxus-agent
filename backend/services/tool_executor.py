@@ -208,7 +208,7 @@ async def _delegate_fan_out(args: dict) -> dict:
         "total": len(submitted),
         "tasks": [
             {"mini_task_id": t.task_id, "label": t.label, **r}
-            for t, r in zip(submitted, results)
+            for t, r in zip(submitted, results, strict=True)
         ],
     }
 
@@ -376,8 +376,8 @@ async def _whatsapp_send(args: dict) -> dict:
     if not to_raw or not message:
         return {"error": "to_raw and message required"}
     try:
-        from .whatsapp_contacts import resolve_contact
         from . import whatsapp as wa
+        from .whatsapp_contacts import resolve_contact
     except Exception as e:
         return {"error": f"whatsapp backend unavailable: {e}"}
 

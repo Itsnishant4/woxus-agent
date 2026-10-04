@@ -27,8 +27,9 @@ def max_parallel() -> int:
     raw = (os.getenv("MAX_PARALLEL_MINI_TASKS", "") or "").strip()
     if not raw:
         try:
-            from ..paths import woxus_data_dir
             import json
+
+            from ..paths import woxus_data_dir
 
             settings_file = woxus_data_dir() / "settings.json"
             if settings_file.exists():
@@ -77,7 +78,7 @@ class MiniTask:
     async def wait(self, timeout: float | None = None) -> dict:
         try:
             await asyncio.wait_for(self._done.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"status": "timeout", "task_id": self.task_id, "label": self.label}
         return {"task_id": self.task_id, "label": self.label, "state": self.state, **self.result}
 

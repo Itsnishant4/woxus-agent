@@ -252,7 +252,7 @@ export default function LicensePage({ onActivated }: Props) {
               <AlertCircle className="h-6 w-6" />
             </div>
             <h2 className="text-lg font-bold text-foreground">Free Trial Expired</h2>
-            <p className="text-sm text-muted-foreground max-w-sm">Your {Math.round(trialTotal / 60)}-minute trial has finished. Purchase a license to continue using Woxus.</p>
+            <p className="text-sm text-muted-foreground max-w-sm">Your {trialDurationLabel ?? formatDuration(trialTotal)} trial has finished. Purchase a license to continue using Woxus.</p>
           </div>
           <a
             href={buyUrl}

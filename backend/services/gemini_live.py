@@ -177,7 +177,8 @@ class GeminiLiveService:
                 self.conversation_log = self.conversation_log[-(MAX_HISTORY_TURNS * 2):]
 
     def _history_turns(self) -> list[dict]:
-        """Build history turns (user/model alternating, no leading model turns)."""
+        """Build history turns (user/model alternating, no leading model turns).
+        Capped at the last 3 exchanges so reconnect replay stays fast."""
         turns = []
         for entry in self.conversation_log:
             text = (entry.get("text") or "").strip()
@@ -187,6 +188,9 @@ class GeminiLiveService:
                 "role": entry["role"],
                 "parts": [{"text": text}],
             })
+        while turns and turns[0]["role"] == "model":
+            turns.pop(0)
+        turns = turns[-6:]
         while turns and turns[0]["role"] == "model":
             turns.pop(0)
         return turns
@@ -315,6 +319,7 @@ class GeminiLiveService:
         self._last_user_input_text = ""
         self._turn_start = 0.0
         self._last_audio_sent_time = None
+        self._last_input_ts = None
 
         mime_type = f"audio/pcm;rate={self.input_sample_rate}"
 
@@ -464,6 +469,7 @@ class GeminiLiveService:
                 user_speech = in_trans.text
                 self._append_to_log("user", user_speech)
                 self._last_user_input_text = user_speech
+                self._last_input_ts = time.time()
                 if self._user_input_time is None or self._has_logged_turn_latency:
                     self._user_input_time = time.time()
                     self._has_logged_turn_latency = False
@@ -483,12 +489,14 @@ class GeminiLiveService:
                 latency_ms = (time.time() - baseline) * 1000
                 latency_sec = latency_ms / 1000
                 self._has_logged_turn_latency = True
+                turn_close_wait = (time.time() - self._last_input_ts) if self._last_input_ts else 0.0
                 user_label = self._last_user_input_text or "speech input"
                 logger.info(
-                    "⏱️ [LATENCY LOG] Woxus response time for '%s': %.2f ms (%.2f s)",
+                    "⏱️ [LATENCY LOG] Woxus response time for '%s': %.2f ms (%.2f s) | turn-close wait %.1fs",
                     user_label,
                     latency_ms,
                     latency_sec,
+                    turn_close_wait,
                 )
                 if latency_callback:
                     await latency_callback(user_label, latency_ms)

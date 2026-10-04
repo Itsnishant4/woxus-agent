@@ -124,9 +124,6 @@ class GeminiLiveService:
                     )
                 )
             ),
-            # Per-utterance transcription for accurate STT + latency measurement.
-            "input_audio_transcription": types.AudioTranscriptionConfig(),
-            "output_audio_transcription": types.AudioTranscriptionConfig(),
             "system_instruction": types.Content(parts=[
                 types.Part(text=self.system_instruction or (
                     "You are Woxus, a smart and friendly voice assistant. "
@@ -145,6 +142,10 @@ class GeminiLiveService:
             ]),
             "tools": self.tools,
         }
+        # Add transcription configs if supported by the installed google-genai SDK
+        if hasattr(types, "AudioTranscriptionConfig"):
+            config_kwargs["input_audio_transcription"] = types.AudioTranscriptionConfig()
+            config_kwargs["output_audio_transcription"] = types.AudioTranscriptionConfig()
         # Mirror the working reference app: the server ends speech turns based
         # on actual audio activity (TURN_INCLUDES_ONLY_ACTIVITY), not on silence
         # while mic background noise keeps streaming. Without this the default
@@ -450,15 +451,17 @@ class GeminiLiveService:
                         await audio_output_callback(part.inline_data.data)
 
             # Output transcription → model log + UI
-            if sc.output_transcription and sc.output_transcription.text:
-                out_text = sc.output_transcription.text
+            out_trans = getattr(sc, "output_transcription", None)
+            if out_trans and getattr(out_trans, "text", None):
+                out_text = out_trans.text
                 self._append_to_log("model", out_text)
                 if transcription_callback:
                     await transcription_callback("gemini", out_text)
 
             # Input transcription → user log + UI
-            if sc.input_transcription and sc.input_transcription.text:
-                user_speech = sc.input_transcription.text
+            in_trans = getattr(sc, "input_transcription", None)
+            if in_trans and getattr(in_trans, "text", None):
+                user_speech = in_trans.text
                 self._append_to_log("user", user_speech)
                 self._last_user_input_text = user_speech
                 if self._user_input_time is None or self._has_logged_turn_latency:
@@ -469,7 +472,7 @@ class GeminiLiveService:
                     await transcription_callback("user", user_speech)
 
             # Measure & log response latency on first turn output.
-            if (sc.model_turn or (sc.output_transcription and sc.output_transcription.text)) and not self._has_logged_turn_latency:
+            if (sc.model_turn or (out_trans and getattr(out_trans, "text", None))) and not self._has_logged_turn_latency:
                 baseline = self._user_input_time
                 if self._last_audio_sent_time and (
                     baseline is None or self._last_audio_sent_time > baseline

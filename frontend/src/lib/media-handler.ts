@@ -231,6 +231,15 @@ export class MediaHandler {
     source.connect(this.audioContext.destination);
 
     const now = this.audioContext.currentTime;
+    // Catch-up: if scheduled playback runs >2s ahead (stale backlog, thawed
+    // tab, resumed context), drop the delay and play live instead of making
+    // the user wait behind old audio.
+    if (this.nextStartTime - now > 2.0) {
+      console.warn(
+        `[audio] ${(this.nextStartTime - now).toFixed(1)}s behind live — skipping stale backlog`
+      );
+      this.nextStartTime = now;
+    }
     this.nextStartTime = Math.max(now, this.nextStartTime);
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;

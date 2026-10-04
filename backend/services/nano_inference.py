@@ -105,8 +105,8 @@ def _load_model():
             from llama_cpp import Llama
             _llm = Llama(
                 model_path=model_path,
-                n_ctx=8192,
-                n_threads=4,
+                n_ctx=4096,
+                n_threads=8,
                 n_gpu_layers=-1,
                 chat_format="chatml",
                 verbose=False,
@@ -148,7 +148,7 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-def agent_step(messages: list, max_tokens: int = 400) -> dict | None:
+def agent_step(messages: list, max_tokens: int = 256) -> dict | None:
     """One inference step in the agentic loop. Returns the AI's parsed JSON decision or None."""
     llm = _load_model()
     if llm is None:

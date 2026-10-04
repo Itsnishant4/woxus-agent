@@ -67,12 +67,35 @@ async def gemini_live_websocket(websocket: WebSocket):
     # the client is far behind, so the newest chunk is dropped rather than
     # blocking the session.
     audio_output_queue: asyncio.Queue[bytes] = asyncio.Queue(maxsize=256)
+    # Approximate queued playback time. 24kHz 16-bit mono PCM = 48000 B/s.
+    # Generation routinely outpaces realtime playback; without a cap every
+    # reply waits behind stale audio and arrives minutes late. 10s keeps
+    # normal long replies intact while cutting pathological backlogs.
+    audio_backlog_bytes = 0
+    MAX_BACKLOG_BYTES = 10 * 48000  # ~10s of audio; older is dropped, newest kept
+    _last_backlog_warn = 0.0
 
     async def audio_output_callback(data: bytes):
         """Enqueue Gemini audio for the sender task. Non-blocking so the Gemini
         receive loop is never stalled by a slow renderer playback queue."""
+        nonlocal audio_backlog_bytes, _last_backlog_warn
         try:
             audio_output_queue.put_nowait(data)
+            audio_backlog_bytes += len(data)
+            # Drop oldest while over budget so replies stay live, not queued.
+            dropped = 0
+            while audio_backlog_bytes > MAX_BACKLOG_BYTES:
+                try:
+                    stale = audio_output_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                audio_backlog_bytes = max(0, audio_backlog_bytes - len(stale))
+                dropped += 1
+            if dropped:
+                now = time.time()
+                if now - _last_backlog_warn > 10.0:
+                    _last_backlog_warn = now
+                    logger.warning("🔊 [AUDIO] dropped %d stale chunk(s) — keeping reply live", dropped)
         except asyncio.QueueFull:
             # Client is far behind — drop the newest chunk rather than block.
             logger.debug("Audio output queue full — dropping chunk")
@@ -88,7 +111,20 @@ async def gemini_live_websocket(websocket: WebSocket):
                 break
 
     async def audio_interrupt_callback():
-        """Notify frontend that Gemini was interrupted."""
+        """Notify frontend that Gemini was interrupted + drop stale queued
+        audio so the next reply starts immediately instead of waiting behind
+        the interrupted turn's leftovers."""
+        nonlocal audio_backlog_bytes
+        drained = 0
+        while True:
+            try:
+                stale = audio_output_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            audio_backlog_bytes = max(0, audio_backlog_bytes - len(stale))
+            drained += 1
+        if drained:
+            logger.info("🔊 [AUDIO] interrupt — dropped %d stale chunk(s)", drained)
         try:
             await websocket.send_json({"type": "interrupted"})
         except Exception:
@@ -159,10 +195,10 @@ async def gemini_live_websocket(websocket: WebSocket):
     # inflate the prompt and slow the first token (list_memories sorts by
     # importance descending).
     try:
-        memories = list_memories()[:20]
+        memories = list_memories()[:6]
         mem_lines = "\n".join(f"- {m['content']}" for m in memories) if memories else "None yet."
-        if len(mem_lines) > 2000:
-            mem_lines = mem_lines[:1997] + "..."
+        if len(mem_lines) > 800:
+            mem_lines = mem_lines[:797] + "..."
     except Exception as e:
         logger.warning("Memory injection failed: %s", e)
         mem_lines = "None yet."

@@ -20,6 +20,7 @@ import shutil
 import signal
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
@@ -83,6 +84,16 @@ def _wacli_bin() -> str | None:
     override = os.getenv("WACLI_PATH", "").strip()
     if override and Path(override).exists():
         return override
+    # Bundled binary in packaged app: <resources>/wacli/wacli[.exe], sitting
+    # next to the PyInstaller backend dir. Only trusted when frozen so a dev
+    # checkout never picks up a stale bundle.
+    if getattr(sys, "frozen", False):
+        try:
+            bundled = Path(sys.executable).resolve().parent.parent / "wacli" / ("wacli.exe" if os.name == "nt" else "wacli")
+            if bundled.exists():
+                return str(bundled)
+        except Exception:
+            pass
     local = BIN_DIR / ("wacli.exe" if os.name == "nt" else "wacli")
     if local.exists():
         return str(local)
@@ -554,6 +565,14 @@ def _install_worker():
         shutil.move(binary, dest)
         if sysname != "windows":
             os.chmod(dest, os.stat(dest).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            # Strip any quarantine flag so Gatekeeper never blocks the child
+            # process on first run (urllib doesn't set it, browsers do — belt
+            # and braces for manually placed files).
+            try:
+                subprocess.run(["xattr", "-d", "com.apple.quarantine", str(dest)],
+                               capture_output=True, timeout=10)
+            except Exception:
+                pass
         shutil.rmtree(tmpdir, ignore_errors=True)
 
         ver = _run([str(dest), "--version"], timeout=20)

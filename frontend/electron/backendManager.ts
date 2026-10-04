@@ -100,6 +100,8 @@ export class BackendManager {
     console.log('[BackendManager] Starting backend...', { bin, cwd });
 
     try {
+      const wacliBin = process.platform === 'win32' ? 'wacli.exe' : 'wacli';
+      const bundledWacli = join(process.resourcesPath, 'wacli', wacliBin);
       backendProcess = spawn(bin, args, {
         cwd,
         stdio: ['ignore', 'inherit', 'inherit'],
@@ -107,6 +109,8 @@ export class BackendManager {
           ...process.env,
           BACKEND_PORT: String(selectedPort),
           PYTHONUNBUFFERED: '1',
+          // Prefer the wacli bundled beside the backend over ~/.woxus/bin.
+          WACLI_PATH: bundledWacli,
           // Packaged apps have no .env — inject keys persisted in settings
           GEMINI_API_KEYS: settingsStore.getApiKey() || process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '',
           GEMINI_API_KEY: settingsStore.getApiKey() || process.env.GEMINI_API_KEY || '',

@@ -3,6 +3,8 @@
 # Dependencies
 # Editor
 # Electron
+# Downloaded per-arch wacli bundle (CI fetches at release time, never committed)
+frontend/resources/wacli/
 # Environment
 # IDE
 # Logs

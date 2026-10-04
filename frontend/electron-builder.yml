@@ -37,8 +37,7 @@ extraResources:
     filter:
       - "**/*"
 mac:
-  icon: ../icons/macos/icon.icns
-  # Ad-hoc code signing (free, no Apple Developer Program). This lets the app
+  icon: ../icons/macos/icon.icns  # Ad-hoc code signing (free, no Apple Developer Program). This lets the app
   # launch and gives Gatekeeper an "Open Anyway" option in System Settings →
   # Privacy & Security (unsigned builds on current macOS show "damaged" with no
   # bypass). We do NOT use Squirrel.Mac's silent in-place install on macOS
@@ -52,6 +51,11 @@ mac:
   # no signature; the outer .app remains ad-hoc signed.
   signIgnore:
     - "/Contents/Resources/backend/"
+    - "/Contents/Resources/wacli/"
+  # Bundled wacli (downloaded per-arch by scripts/download-wacli.mjs in CI).
+  extraResources:
+    - from: resources/wacli
+      to: wacli
   hardenedRuntime: false
   entitlements: null
   entitlementsInherit: null
@@ -69,6 +73,10 @@ mac:
     NSMicrophoneUsageDescription: Woxus uses the microphone to animate the orb when you speak.
 win:
   icon: ../icons/windows/icon.ico
+  # Bundled wacli (downloaded per-arch by scripts/download-wacli.mjs in CI).
+  extraResources:
+    - from: resources/wacli
+      to: wacli
   target:
     - target: nsis
       arch:

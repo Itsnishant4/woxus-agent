@@ -51,14 +51,20 @@ jobs:
             os: macos-latest
             artifact: backend-dist-macos-arm64
             electron-args: --mac --arm64
+            wacli-os: darwin
+            wacli-arch: arm64
           - name: macos-x64
             os: macos-15-intel
             artifact: backend-dist-macos-x64
             electron-args: --mac --x64
+            wacli-os: darwin
+            wacli-arch: x64
           - name: windows
             os: windows-latest
             artifact: backend-dist-windows
             electron-args: --win
+            wacli-os: win32
+            wacli-arch: x64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -79,6 +85,9 @@ jobs:
           name: ${{ matrix.artifact }}
           path: backend/dist/woxus-backend
       - run: pnpm install --frozen-lockfile
+      # Bundle the matching wacli binary (WhatsApp needs it on user systems).
+      # Pinned via WACLI_VERSION (default v0.19.0, tested good).
+      - run: node scripts/download-wacli.mjs --os ${{ matrix.wacli-os }} --arch ${{ matrix.wacli-arch }}
       - run: pnpm run electron:release -- ${{ matrix.electron-args }}
         env:
           # Cross-repo PAT: GITHUB_TOKEN is scoped to woxus-agent only, but the

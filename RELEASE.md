@@ -8,12 +8,14 @@ This is the step-by-step process for shipping a new version of Woxus to users.
 
 Releases are **fully automated** by GitHub Actions. You only need to:
 
-1. **Bump the version** in `frontend/package.json`
-2. **Push a git tag** starting with `v` (e.g. `v0.1.1`)
+1. **Bump the version** in `frontend/package.json` (+ `package-lock.json` mirror)
+2. **Push a git tag** starting with `v` (e.g. `v0.1.13`)
 
 Pushing the tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the
-backend (PyInstaller) + frontend (electron-builder) on **macOS, Windows, and Linux** in parallel, and uploads the
-installers + update metadata to **GitHub Releases**.
+backend (PyInstaller) + frontend (electron-builder) on **macOS arm64, macOS x64, and Windows** in parallel,
+bundles the matching **wacli** binary per platform (WhatsApp needs it on user systems), and uploads the
+installers + update metadata to the public
+**[woxus-releases](https://github.com/Itsnishant4/woxus-releases)** repo.
 
 Users' apps then auto-detect the update on next launch and show the in-app banner.
 
@@ -21,24 +23,17 @@ Users' apps then auto-detect the update on next launch and show the in-app banne
 
 ## ⚠️ Before you start (one-time setup)
 
-Verify these exist — the release will fail silently or publish nothing without them:
+Verify these exist:
 
-- [ ] **`GH_TOKEN`** is the only secret required (the workflow uses `secrets.GITHUB_TOKEN`, which GitHub provides
-      automatically — no manual secret needed).
-- [ ] `frontend/electron-builder.yml` has the correct `publish` block:
-      ```yaml
-      publish:
-        provider: github
-        owner: Itsnishant4
-        repo: woxus-agent
-        token: ${env.GH_TOKEN}
-      ```
+- [ ] **`RELEASE_TOKEN`** secret (cross-repo PAT with write access to `woxus-releases`; the workflow
+      sets it as `GH_TOKEN` — plain `GITHUB_TOKEN` can't publish cross-repo).
+- [ ] `frontend/electron-builder.yml` `publish` block points at `Itsnishant4/woxus-releases`
+      with `releaseType: release` (merges all platforms into one published release).
 - [ ] The `frontend` folder uses **pnpm** (the workflow runs `pnpm install --frozen-lockfile`). Confirm
-      `frontend/pnpm-lock.yaml` is committed.
+      `frontend/pnpm-lock.yaml` is committed and in sync.
 
-> **macOS note:** updates work for users who already launched the app once (right-click → Open clears
-> quarantine). Fresh installs show the Gatekeeper "unidentified developer" step once. Windows/Linux update
-> seamlessly.
+> **macOS note:** ad-hoc signed (`identity: "-"`). Updates work for users who already launched the app once
+> (right-click → Open clears quarantine). Fresh installs show the Gatekeeper "unidentified developer" step once.
 
 ---
 
@@ -84,21 +79,21 @@ git push origin v0.1.1
 
 Open: `https://github.com/Itsnishant4/woxus-agent/actions`
 
-There are 6 jobs total (build + release × 3 OSes). They run in parallel and take **~5–15 minutes**.
+There are 6 jobs total (backend + release × mac-arm64, mac-x64, Windows). They run in parallel and take
+**~15–30 minutes** (backend PyInstaller + llama.cpp builds are slow).
 
 ### 6. Verify the release
 
-Once green, open: `https://github.com/Itsnishant4/woxus-agent/releases`
+Once green, open: `https://github.com/Itsnishant4/woxus-releases/releases`
 
-The release should contain:
+The `v0.1.13` release should be **published** (not draft) and contain:
 
 | File | Platform | Purpose |
 |------|----------|---------|
-| `Woxus-0.1.1-arm64.dmg` / `.zip` | macOS | Installer + updater artifact |
-| `Woxus-0.1.1-arm64.AppImage` | Linux | Installer + updater artifact |
-| `Woxus-0.1.1-setup.exe` | Windows | Installer + updater artifact |
-| `latest.yml` | All | **Update manifest** — the app reads this to detect new versions |
-| `latest-mac.yml` / `latest-linux.yml` | mac/linux | Platform update manifests |
+| `Woxus-0.1.13-arm64.dmg` / `.zip` | macOS arm64 | Installer + updater artifact |
+| `Woxus-0.1.13-x64.dmg` / `.zip` | macOS Intel | Installer + updater artifact |
+| `Woxus-0.1.13-x64.exe` / `Woxus Setup 0.1.13.exe` | Windows | Installer + updater artifact |
+| `latest.yml` / `latest-mac.yml` | All / mac | **Update manifests** — the app reads these to detect new versions |
 | `*.blockmap` | All | Differential-update deltas |
 
 > If you don't see `latest*.yml` + `*.blockmap` files, the updater **will not work** — re-check the publish

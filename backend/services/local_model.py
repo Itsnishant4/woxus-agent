@@ -9,9 +9,9 @@ import logging
 import os
 import platform
 import re
+import ssl
 import sys
 import threading
-import ssl
 import urllib.request
 
 # --- TLS trust bootstrap --------------------------------------------------

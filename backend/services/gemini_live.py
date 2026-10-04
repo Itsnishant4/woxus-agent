@@ -554,8 +554,7 @@ class GeminiLiveService:
                     text_input_queue.put_nowait(("system_result", note))
                 except Exception:
                     pass
-            for tid in task_ids:
-                self._bg_tool_tasks.discard(asyncio.current_task())
+            self._bg_tool_tasks.discard(asyncio.current_task())
 
         async def _run_tool_background(fn_name: str, fn_args: dict, fn_id: str):
             """Run a delegated tool (mini agent task) without blocking the

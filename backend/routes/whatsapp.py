@@ -33,7 +33,7 @@ async def whatsapp_status():
     st = whatsapp.get_status()
     # attach NLP pool size (local + cached) without leaking numbers
     try:
-        from ..services.whatsapp_contacts import _local_contacts, _cached_wacli_contacts
+        from ..services.whatsapp_contacts import _cached_wacli_contacts, _local_contacts
 
         st["contacts"] = len(_local_contacts()) + len(_cached_wacli_contacts())
     except Exception:
@@ -119,7 +119,7 @@ async def whatsapp_send(body: WhatsappSendBody):
             chosen = cands[int(body.pick)]
             to_send = chosen.get("phone", to_raw)
         except Exception:
-            raise HTTPException(400, "invalid pick index")
+            raise HTTPException(400, "invalid pick index") from None
         result = await whatsapp.send_text_async(to_send, msg)
         if isinstance(result, dict):
             result["matched"] = chosen.get("name", to_send)

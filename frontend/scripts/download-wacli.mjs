@@ -2,7 +2,7 @@
 // so electron-builder bundles it (per-platform CI job downloads its own).
 // Usage: node scripts/download-wacli.mjs [--os darwin|linux|win32] [--arch arm64|x64]
 // Env: WACLI_VERSION (default v0.19.0, tested good).
-import { mkdirSync, createWriteStream, existsSync, rmSync } from 'fs';
+import { mkdirSync, createWriteStream, rmSync, readdirSync, renameSync, statSync, chmodSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { pipeline } from 'stream/promises';
@@ -56,10 +56,9 @@ if (ext === '.zip') {
 } else {
   execSync(`tar -xzf "${archivePath}" -C "${DEST}"`, { stdio: 'inherit' });
 }
-import('fs').then(({ unlinkSync }) => unlinkSync(archivePath));
+try { unlinkSync(archivePath); } catch { /* already gone — cleanup loop below covers it */ }
 
 // Flatten: move binary up if nested, drop everything else.
-import { readdirSync, renameSync, statSync, chmodSync } from 'fs';
 function findBin(dir) {
   for (const e of readdirSync(dir)) {
     const p = join(dir, e);

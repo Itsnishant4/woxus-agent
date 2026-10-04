@@ -36,7 +36,7 @@ export class MediaHandler {
         this.audioContext.audioWorklet &&
         typeof AudioWorkletNode !== "undefined"
       ) {
-        await this.audioContext.audioWorklet.addModule("./pcm-processor.js");
+        await this.audioContext.audioWorklet.addModule("./pcm-processor.js?v=" + Date.now());
       } else {
         console.warn(
           "AudioWorklet not available, using ScriptProcessorNode fallback"

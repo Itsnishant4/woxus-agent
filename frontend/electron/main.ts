@@ -8,6 +8,8 @@ import { initAutoUpdater, checkForUpdates, downloadUpdate, downloadMacDmg, insta
 import { pasteText, getActiveWindowTitle, saveActiveWindow, restoreActiveWindow } from './pasteService.js';
 import { checkPermission, openPermissionSettings } from './permissionService.js';
 
+app.disableHardwareAcceleration();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

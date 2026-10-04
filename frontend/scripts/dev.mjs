@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 
 async function start() {
   console.log('[Dev] Building Electron scripts...');
-  execSync('npx tsc -p tsconfig.electron.json', { cwd: root, stdio: 'inherit' });
+  execSync('npx esbuild electron/*.ts --outdir=dist-electron --platform=node --format=esm', { cwd: root, stdio: 'inherit', shell: true });
 
   const server = await createServer({ configFile: './vite.config.ts', root });
   await server.listen();

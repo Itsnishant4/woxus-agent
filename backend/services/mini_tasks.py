@@ -151,10 +151,10 @@ class MiniTaskManager:
     def get(self, task_id: str) -> MiniTask | None:
         return self._tasks.get(task_id)
 
-    def list(self) -> list[MiniTask]:
+    def list(self) -> "list[MiniTask]":
         return sorted(self._tasks.values(), key=lambda t: t.start_time, reverse=True)
 
-    def pending(self) -> list[MiniTask]:
+    def pending(self) -> "list[MiniTask]":
         return [t for t in self._tasks.values() if t.state in ("queued", "running") and not t.announced]
 
 

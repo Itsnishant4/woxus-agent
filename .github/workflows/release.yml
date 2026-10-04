@@ -88,6 +88,8 @@ jobs:
       # Bundle the matching wacli binary (WhatsApp needs it on user systems).
       # Pinned via WACLI_VERSION (default v0.19.0, tested good).
       - run: node scripts/download-wacli.mjs --os ${{ matrix.wacli-os }} --arch ${{ matrix.wacli-arch }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: pnpm run electron:release -- ${{ matrix.electron-args }}
         env:
           # Cross-repo PAT: GITHUB_TOKEN is scoped to woxus-agent only, but the

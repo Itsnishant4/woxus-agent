@@ -25,9 +25,11 @@ const ext = osToken === 'windows' ? '.zip' : '.tar.gz';
 
 const apiBase = 'https://api.github.com/repos/openclaw/wacli/releases';
 const relUrl = VERSION === 'latest' ? `${apiBase}/latest` : `${apiBase}/tags/${VERSION}`;
-const res = await fetch(relUrl, {
-  headers: { Accept: 'application/json', 'User-Agent': 'Woxus-Release' },
-});
+// Authenticated API calls avoid the shared-runner 60/hr rate limit when
+// GITHUB_TOKEN is present (CI sets it); downloads stay unauthenticated.
+const apiHeaders = { Accept: 'application/json', 'User-Agent': 'Woxus-Release' };
+if (process.env.GITHUB_TOKEN) apiHeaders.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+const res = await fetch(relUrl, { headers: apiHeaders });
 if (!res.ok) throw new Error(`GitHub API ${res.status} for ${relUrl}`);
 const release = await res.json();
 const tag = release.tag_name;

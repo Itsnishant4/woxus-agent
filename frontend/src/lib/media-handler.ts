@@ -231,15 +231,14 @@ export class MediaHandler {
     source.connect(this.audioContext.destination);
 
     const now = this.audioContext.currentTime;
-    // Catch-up: if scheduled playback runs >2s ahead (stale backlog, thawed
-    // tab, resumed context), drop the delay and play live instead of making
-    // the user wait behind old audio.
-    if (this.nextStartTime - now > 2.0) {
-      console.warn(
-        `[audio] ${(this.nextStartTime - now).toFixed(1)}s behind live — skipping stale backlog`
-      );
-      this.nextStartTime = now;
-    }
+    // Play strictly sequentially: every chunk starts when the previous one
+    // ends, so two chunks can never sound at once by construction. A burst of
+    // large audio blobs may run the schedule ahead of realtime (playback lags
+    // the text slightly); that lag drains during natural turn pauses. Never
+    // reset/drop here — dropping punches holes in the speech and resetting
+    // the clock layers new audio over old (two voices at once). Cutting a
+    // superseded turn is handled explicitly via stopAudioPlayback + the
+    // server-side interrupt drain.
     this.nextStartTime = Math.max(now, this.nextStartTime);
     source.start(this.nextStartTime);
     this.nextStartTime += buffer.duration;

@@ -1,37 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Loader2 } from 'lucide-react';
-import { resolveBackendPort } from '../services/api';
-const API = `http://127.0.0.1:${resolveBackendPort()}/api`;
+import { Search, Loader2, Volume2 } from 'lucide-react';
+import { useVoiceChat, toolWorkLabel } from '../hooks/useVoiceChat';
 
-// Stable per-overlay-session id so the backend keeps conversation context
-const CONVERSATION_ID =
-  typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `overlay-${Date.now()}`;
-
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+// Overlay popup: type text → Gemini main voice agent speaks the reply.
+// Shares the useVoiceChat session logic with the permanent Chat screen.
 
 export default function OverlayPage() {
   const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { messages, connecting, connected, speaking, working, sendVoiceText } = useVoiceChat();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const loadHistory = async () => {
-    try {
-      const res = await fetch(`${API}/overlay/history?conversation_id=${CONVERSATION_ID}`);
-      const data = await res.json();
-      const history: ChatMessage[] = (data.history || []).filter(
-        (m: ChatMessage) => m.role === 'user' || m.role === 'assistant'
-      );
-      setMessages(history);
-    } catch {
-      /* ignore */
-    }
+  const submitQuery = async (text?: string) => {
+    if (!text?.trim() || connecting) return;
+    const trimmed = text.trim();
+    setQuery('');
+    await sendVoiceText(trimmed);
   };
 
   // Close overlay on Escape key
@@ -49,9 +33,7 @@ export default function OverlayPage() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         setQuery('');
-        setLoading(false);
       } else {
-        loadHistory();
         setTimeout(() => inputRef.current?.focus(), 100);
       }
     };
@@ -66,50 +48,13 @@ export default function OverlayPage() {
   }, []);
 
   useEffect(() => {
-    loadHistory();
     inputRef.current?.focus();
   }, []);
 
   // Keep the conversation scrolled to the newest message
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, loading]);
-
-  const submitQuery = async (text?: string) => {
-    if (!text?.trim()) return;
-
-    const trimmed = text.trim();
-    setQuery('');
-    setLoading(true);
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
-    try {
-      const licenseKey = localStorage.getItem('woxus_license_key') || '';
-      const hwid = await (window as any).electronAPI?.getHardwareId?.() || 'unknown';
-
-      const res = await fetch(`${API}/overlay/clarify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-License-Key': licenseKey,
-          'X-Hardware-Id': hwid,
-        },
-        body: JSON.stringify({ content: trimmed, conversation_id: CONVERSATION_ID }),
-      });
-      const data = await res.json();
-      const reply = res.ok
-        ? data.clarification
-        : data.detail || data.error || 'Failed to get a response.';
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
-    } catch (err) {
-      console.error(err);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Failed to get a response.' },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [messages, speaking, working]);
 
   return (
     <div className="flex flex-col items-center justify-start pt-4 p-4 h-full bg-transparent overflow-hidden pointer-events-none">
@@ -126,9 +71,35 @@ export default function OverlayPage() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') submitQuery(query);
             }}
-            placeholder="Ask Woxus anything..."
+            placeholder="Type a message, Woxus replies with voice..."
             className="flex-1 bg-transparent text-lg text-foreground placeholder:text-muted-foreground/40 focus:outline-none"
           />
+          {speaking && !working && <Volume2 className="h-4 w-4 text-emerald-500 animate-pulse shrink-0" />}
+          {working && <Loader2 className="h-4 w-4 text-violet-500 animate-spin shrink-0" />}
+        </div>
+
+        {/* Voice status */}
+        <div className="flex items-center gap-2 px-5 pb-3 shrink-0">
+          {connecting ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Connecting voice agent...</span>
+            </>
+          ) : working ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+              <span className="text-xs text-muted-foreground">{toolWorkLabel(working.name, working.label)}</span>
+            </>
+          ) : speaking ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
+              <span className="text-xs text-muted-foreground">Voice agent is speaking...</span>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {connected ? 'Voice agent ready — replies spoken aloud' : 'Press Enter — voice agent answers aloud'}
+            </span>
+          )}
         </div>
 
         {/* Conversation */}
@@ -143,18 +114,17 @@ export default function OverlayPage() {
                 </div>
               ) : (
                 <div key={i} className="flex items-start gap-3 text-foreground/90 leading-relaxed text-sm">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                     <span className="text-[10px] font-bold text-white">W</span>
                   </div>
                   <div className="flex-1 whitespace-pre-wrap">{m.content}</div>
                 </div>
               )
             )}
-
-            {loading && (
+            {working && (
               <div className="flex items-center gap-3 text-muted-foreground font-medium text-sm">
                 <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
-                <span>Woxus is thinking...</span>
+                <span>{toolWorkLabel(working.name, working.label)}</span>
               </div>
             )}
           </div>

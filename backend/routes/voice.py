@@ -46,6 +46,8 @@ You are Woxus, a smart, friendly desktop voice assistant living on the user's co
 3. OTHER COMPUTER TASKS (create a folder or project, install packages, run a build, read or write files, open or delete files, terminal work, list desktop contents): speak a short acknowledgment, then delegate to the local agent, then report the result in a second voice turn.
 4. MEMORY: when the user shares a durable fact about themselves (name, preferred language, preferences, habits, projects, goals) or asks you to remember something, call memory_create(content='...') — only for lasting facts, never small talk.
 5. WHATSAPP SEND (send WhatsApp to <name/phone> <text>, e.g. send WhatsApp to mom hello, message Rahul on WhatsApp): call whatsapp_send(to_raw='<verbatim name/phone>', message='<text>') ONCE — it resolves the name via NLP and sends immediately, no confirmation step. Then tell the user it was sent (or the error, e.g. not linked / unknown name). Never invent numbers.
+5b. WHATSAPP READ (read my WhatsApp, what did <name> send, any new messages, check the <group> group, find a message about <x>): call whatsapp_read(chat='<verbatim name/phone/group>') for one chat, whatsapp_recent() for an unread/new-message sweep, or whatsapp_search(query='<x>') to find something. Then SUMMARIZE briefly in your own words — who sent what and when. Never invent message content; only report what the tool returned.
+5c. WHATSAPP REPLY (reply to <name>, answer <name> on WhatsApp): ALWAYS call whatsapp_reply(chat='<verbatim>', message='<reply text>') — it reads their latest messages FIRST so the reply fits the context. If the user didn't say WHAT to reply (just "reply to Kunal"), call whatsapp_reply(chat='<name>') with NO message, tell them what the person sent last, and ask what the reply should be. Never reply blind.
 6. PARALLEL + BARGE-IN: while one delegated task runs, the user can keep talking — take each new task immediately and delegate it too, never say "wait". When the user asks for SEVERAL INDEPENDENT things in one breath (e.g. "create folder X and send WhatsApp to mom"), call delegate_tasks_to_mini_agent(tasks=[...]) ONCE with one item per thing (short label each). Speak one brief ack first ("On both."), then report each result as it completes — background completions arrive as [System notice] turns naming the task; announce each briefly by its label. Check mini_task_status/mini_task_list if you lose track. Dependent steps that must run in order go in ONE task_prompt, never fanned out.
 
 ## Constraints
@@ -72,17 +74,41 @@ async def gemini_live_websocket(websocket: WebSocket):
     # Generation routinely outpaces realtime playback; without a cap every
     # reply waits behind stale audio and arrives minutes late. 10s keeps
     # normal long replies intact while cutting pathological backlogs.
+    # Framed audio protocol (see docs in gemini_text service stays text-only).
+    # Every outbound PCM blob is split into fixed 20ms frames (960 bytes @
+    # 24kHz 16-bit mono) prefixed with an 8-byte big-endian header
+    # (turn_id, seq). The frontend streamer plays frames sequentially and
+    # discards stale turns deterministically — no timing heuristics.
+    FRAME_BYTES = 960
+    frame_state = {"turn": 0, "seq": 0, "tokens": 96000.0, "at": time.monotonic()}
+    PACER_RATE = 48000.0  # bytes/sec == realtime playback rate
+    PACER_BURST = 96000.0  # allow ~2s bursts, then pace to realtime
     audio_backlog_bytes = 0
     MAX_BACKLOG_BYTES = 10 * 48000  # ~10s of audio; older is dropped, newest kept
     _last_backlog_warn = 0.0
 
     async def audio_output_callback(data: bytes):
-        """Enqueue Gemini audio for the sender task. Non-blocking so the Gemini
-        receive loop is never stalled by a slow renderer playback queue."""
+        """Split Gemini audio into tagged frames and enqueue them.
+
+        Non-blocking so the Gemini receive loop is never stalled by a slow
+        renderer playback queue."""
         nonlocal audio_backlog_bytes, _last_backlog_warn
         try:
-            audio_output_queue.put_nowait(data)
-            audio_backlog_bytes += len(data)
+            import struct as _struct
+
+            turn = frame_state["turn"]
+            # Pad the tail so every frame is exactly FRAME_BYTES.
+            if len(data) % FRAME_BYTES:
+                data = data + b"\x00" * (FRAME_BYTES - len(data) % FRAME_BYTES)
+            for off in range(0, len(data), FRAME_BYTES):
+                frame_state["seq"] += 1
+                frame = _struct.pack(">II", turn, frame_state["seq"]) + data[off:off + FRAME_BYTES]
+                try:
+                    audio_output_queue.put_nowait(frame)
+                except asyncio.QueueFull:
+                    logger.debug("Audio output queue full — dropping chunk")
+                    break
+                audio_backlog_bytes += len(frame)
             # Drop oldest while over budget so replies stay live, not queued.
             dropped = 0
             while audio_backlog_bytes > MAX_BACKLOG_BYTES:
@@ -102,9 +128,27 @@ async def gemini_live_websocket(websocket: WebSocket):
             logger.debug("Audio output queue full — dropping chunk")
 
     async def audio_sender():
-        """Drain the outbound audio queue and push bytes to the renderer."""
+        """Drain the outbound frame queue paced to realtime playback rate.
+
+        Bursts are allowed (token bucket), then sending paces to 48KB/s so a
+        fast generator can't build an unbounded ahead-of-realtime backlog in
+        the renderer. A slow renderer still never stalls Gemini's receive
+        loop — the bounded queue drops newest on full.
+        """
         while True:
             data = await audio_output_queue.get()
+            # Token bucket pacing.
+            need = float(len(data))
+            while True:
+                now_m = time.monotonic()
+                elapsed = now_m - frame_state["at"]
+                frame_state["at"] = now_m
+                frame_state["tokens"] = min(PACER_BURST, frame_state["tokens"] + elapsed * PACER_RATE)
+                if frame_state["tokens"] >= need:
+                    frame_state["tokens"] -= need
+                    break
+                deficit = need - frame_state["tokens"]
+                await asyncio.sleep(min(0.02, deficit / PACER_RATE))
             try:
                 await websocket.send_bytes(data)
             except Exception:
@@ -160,6 +204,14 @@ async def gemini_live_websocket(websocket: WebSocket):
             logger.info("🛠️ [TOOL RESULT] %s -> %s", name, str(result)[:200])
         except Exception:
             logger.debug("Failed to send tool result")
+
+    async def tool_start_callback(name: str, label: str = ""):
+        """Tell the frontend a tool started so it can show a working state."""
+        try:
+            await websocket.send_json({"type": "tool_start", "name": name, "label": label})
+            logger.info("🛠️ [TOOL START] %s %s", name, label[:80])
+        except Exception:
+            logger.debug("Failed to send tool start")
 
     # Admin-managed key pool: fetch the license-gated list from the admin
     # panel (falls back to local/env keys when offline or unlicensed).
@@ -244,6 +296,27 @@ async def gemini_live_websocket(websocket: WebSocket):
                             image_data = base64.b64decode(payload["data"])
                             await video_input_queue.put(image_data)
                             continue
+                        if isinstance(payload, dict) and payload.get("type") == "interrupt":
+                            # Text-chat barge-in: new turn starts. Drain the
+                            # previous reply's queued frames at the source so
+                            # the old tail can't talk over the new reply.
+                            frame_state["turn"] += 1
+                            frame_state["tokens"] = PACER_BURST
+                            drained = 0
+                            while True:
+                                try:
+                                    stale = audio_output_queue.get_nowait()
+                                except asyncio.QueueEmpty:
+                                    break
+                                audio_backlog_bytes = max(0, audio_backlog_bytes - len(stale))
+                                drained += 1
+                            if drained:
+                                logger.info("🔊 [AUDIO] text barge-in (turn %d) — dropped %d stale frame(s)", frame_state["turn"], drained)
+                            try:
+                                await websocket.send_json({"type": "interrupted", "turn": frame_state["turn"]})
+                            except Exception:
+                                pass
+                            continue
                         # Frontend wraps plain text as {"text": "..."}; unwrap it
                         if isinstance(payload, dict) and payload.get("text"):
                             text = payload["text"]
@@ -271,6 +344,7 @@ async def gemini_live_websocket(websocket: WebSocket):
                 transcription_callback=transcription_callback,
                 latency_callback=latency_callback,
                 tool_result_callback=tool_result_callback,
+                tool_start_callback=tool_start_callback,
             ),
         )
     except Exception as e:

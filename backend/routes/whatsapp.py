@@ -71,6 +71,39 @@ async def install_status():
 async def whatsapp_logout():
     return whatsapp.logout()
 
+@router.get("/messages")
+async def whatsapp_read(chat: str, limit: int = 10, from_them: bool = True):
+    """Read recent messages with someone (DM) or a group."""
+    import asyncio as _asyncio
+
+    if not chat.strip():
+        raise HTTPException(400, "chat required")
+    return await _asyncio.to_thread(whatsapp.read_messages, chat.strip(), max(1, min(limit, 50)), from_them, True)
+
+@router.get("/search")
+async def whatsapp_search_messages(q: str, chat: str | None = None, limit: int = 10):
+    """Full-text search across WhatsApp history."""
+    import asyncio as _asyncio
+
+    if not q.strip():
+        raise HTTPException(400, "q required")
+    return await _asyncio.to_thread(
+        whatsapp.search_messages, q.strip(), chat.strip() if chat else None, max(1, min(limit, 50)))
+
+@router.get("/recent")
+async def whatsapp_recent(limit: int = 10):
+    """Recently active chats (DMs + groups) with previews."""
+    import asyncio as _asyncio
+
+    return await _asyncio.to_thread(whatsapp.recent_chats, max(1, min(limit, 50)), True)
+
+@router.post("/sync")
+async def whatsapp_sync():
+    """Pull latest messages into the local DB."""
+    import asyncio as _asyncio
+
+    return await _asyncio.to_thread(whatsapp.sync_once)
+
 
 @router.get("/contacts/search")
 async def contacts_search(q: str = ""):

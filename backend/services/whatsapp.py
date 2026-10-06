@@ -27,7 +27,7 @@ import threading
 import time
 import urllib.request
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ..paths import woxus_data_dir
@@ -473,6 +473,348 @@ def logout() -> dict:
 
 async def send_text_async(to: str, message: str) -> dict:
     return await asyncio.to_thread(send_text, to, message)
+
+# --- Read messages (wacli local DB backed) ---
+
+def _to_jid(recipient: str) -> str:
+    """Normalize a phone or cached JID into a chat JID for --chat filters."""
+    r = (recipient or "").strip()
+    if "@" in r:
+        return r
+    digits = re.sub(r"\D", "", r)
+    return f"{digits}@s.whatsapp.net" if digits else r
+
+def _fmt_ts(ts: str) -> str:
+    """wacli timestamps are UTC ISO ('...Z'). Render in the server's local
+    timezone (the user's machine) so 'when' answers match their clock."""
+    s = (ts or "").strip()
+    if not s:
+        return ""
+    try:
+        iso = s.replace("Z", "+00:00") if s.endswith(("Z", "z")) else s
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone().strftime("%b %d, %I:%M %p").replace(" 0", " ")
+    except Exception:
+        return s
+
+def _norm_message(it: dict) -> dict:
+    """Best-effort normalize one wacli message row across output shapes.
+
+    Real wacli shape: ChatJID/ChatName/SenderJID/SenderName/Timestamp/
+    FromMe/Text/MediaType. Aliases cover older/flat variants.
+    """
+    if not isinstance(it, dict):
+        return {"text": str(it)[:500]}
+    text = it.get("Text", it.get("text", it.get("body", it.get("message", it.get("content", "")))))
+    if isinstance(text, dict):
+        text = text.get("text", text.get("body", str(text)))
+    chat = it.get("ChatJID", it.get("chat", it.get("chat_jid", it.get("remote_jid", it.get("jid", "")))))
+    if isinstance(chat, dict):
+        chat = chat.get("jid", chat.get("name", str(chat)))
+    chat_name = it.get("ChatName", "")
+    sender = it.get("SenderName", it.get("sender", it.get("sender_jid", it.get("push_name", it.get("author", "")))))
+    if isinstance(sender, dict):
+        sender = sender.get("push_name", sender.get("jid", str(sender)))
+    if not sender and it.get("SenderJID"):
+        sender = it.get("SenderJID")
+    ts = it.get("Timestamp", it.get("timestamp", it.get("ts", it.get("sent_at", it.get("time", "")))))
+    from_me = it.get("FromMe", it.get("from_me", it.get("fromMe", it.get("is_from_me", False))))
+    mtype = it.get("MediaType", it.get("type", it.get("message_type", "text"))) or "text"
+    if mtype is True or mtype == "":
+        mtype = "text"
+    return {
+        "chat": str(chat or ""),
+        "chat_name": str(chat_name or ""),
+        "sender": str(sender or ""),
+        "from_me": bool(from_me),
+        "timestamp": _fmt_ts(str(ts or "")),
+        "type": str(mtype),
+        "text": str(text or "")[:2000],
+    }
+
+def _parse_rows(out: str) -> list[dict]:
+    try:
+        payload = json.loads(out)
+    except Exception:
+        return []
+    items = payload if isinstance(payload, list) else payload.get("data", payload.get("messages", []))
+    if isinstance(items, dict):  # {"fts":..,"messages":[...]} envelope
+        items = items.get("messages", items.get("data", []))
+    if not isinstance(items, list):
+        return []
+    return [_norm_message(it) for it in items if isinstance(it, dict)]
+
+def _require_paired() -> dict | None:
+    st = get_status()
+    if not st.get("paired"):
+        if not is_installed():
+            return {"error": "wacli not installed. Install it in Settings → WhatsApp first.", "code": "not_installed"}
+        return {"error": "WhatsApp is not linked. Open Settings → WhatsApp → Pair / Show QR and scan with your phone first.", "code": "needs_login"}
+    return None
+
+_last_sync_at: float = 0.0
+SYNC_TTL_SECONDS = 60.0
+
+def sync_once(timeout: int = 90) -> dict:
+    """Pull latest messages into the local DB (blocking, one shot).
+
+    --idle-exit caps the idle tail so a quiet account returns fast instead
+    of sitting out the full default window.
+    """
+    if not is_installed():
+        return {"ok": False, "error": "wacli not installed"}
+    res = _run(_base_args() + ["sync", "--once", "--idle-exit", "10s"], timeout=timeout)
+    if res.get("returncode") == 0:
+        global _last_sync_at
+        _last_sync_at = time.time()
+        return {"ok": True}
+    return {"ok": False, "error": (res.get("stderr") or res.get("stdout") or "sync failed")[:500]}
+
+def _sync_stamp() -> str:
+    if not _last_sync_at:
+        return "never"
+    try:
+        return datetime.fromtimestamp(_last_sync_at).isoformat(timespec="seconds")
+    except Exception:
+        return "unknown"
+
+
+def _maybe_sync(timeout: int = 60):
+    """Best-effort freshness: sync at most once per SYNC_TTL_SECONDS.
+
+    Skipped entirely while the background follow-sync is alive (the DB is
+    then continuously fresh and a blocking --once would just contend).
+    """
+    if _follow_state.get("alive"):
+        return
+    if time.time() - _last_sync_at < SYNC_TTL_SECONDS:
+        return
+    try:
+        sync_once(timeout=timeout)
+    except Exception as e:
+        logger.debug("background sync failed: %s", e)
+
+
+# --- Background follow-sync: one long-lived `wacli sync` keeps the local DB
+# continuously fresh so reads never wait on a blocking --once. ---
+
+_follow_state = {"alive": False, "started_at": 0.0, "restarts": 0, "last_error": ""}
+_follow_lock = threading.RLock()  # reentrant: ensure_follow_sync nests follow_status()
+
+def follow_status() -> dict:
+    with _follow_lock:
+        return dict(_follow_state)
+
+def _follow_worker():
+    backoff = 5.0
+    while True:
+        try:
+            bin_path = _wacli_bin()
+            if not bin_path:
+                with _follow_lock:
+                    _follow_state.update({"alive": False, "last_error": "wacli not installed"})
+                return
+            st = get_status()
+            if not st.get("paired"):
+                with _follow_lock:
+                    _follow_state.update({"alive": False, "last_error": "not paired — start after linking"})
+                return
+            with _follow_lock:
+                _follow_state.update({"alive": True, "started_at": time.time(), "last_error": ""})
+                _follow_state["restarts"] += 1
+            logger.info("[wacli-follow] starting continuous sync")
+            proc = subprocess.Popen(
+                [bin_path] + (["--account", WACLI_ACCOUNT] if WACLI_ACCOUNT else []) +
+                ["sync", "--follow", "--presence-mode", "quiet"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            proc.wait()
+            logger.warning("[wacli-follow] sync exited (rc=%s), restarting in %.0fs", proc.returncode, backoff)
+        except Exception as e:
+            logger.warning("[wacli-follow] error: %s", e)
+            with _follow_lock:
+                _follow_state["last_error"] = str(e)[:300]
+        with _follow_lock:
+            _follow_state["alive"] = False
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 120.0)
+
+_follow_thread: threading.Thread | None = None
+
+def ensure_follow_sync() -> dict:
+    """Start the background continuous sync once (idempotent). Call at
+    backend startup and lazily before reads."""
+    global _follow_thread
+    with _follow_lock:
+        if _follow_thread is not None and _follow_thread.is_alive():
+            return {"status": "already_running", **follow_status()}
+        _follow_thread = threading.Thread(target=_follow_worker, daemon=True, name="wacli-follow")
+        _follow_thread.start()
+        return {"status": "started", **follow_status()}
+
+def _find_chat_jid(name: str) -> tuple[str | None, str]:
+    """Authoritative chat lookup straight from `wacli chats list` (DMs +
+    groups). Returns (jid, display_name). Exact case-insensitive match wins,
+    then phone-digit match, then prefix match."""
+    res = _run(_base_args() + ["chats", "list", "--json"], timeout=20)
+    out = (res.get("stdout") or "").strip()
+    if not out or res.get("returncode") != 0:
+        return None, ""
+    try:
+        payload = json.loads(out)
+    except Exception:
+        return None, ""
+    items = payload if isinstance(payload, list) else payload.get("data", payload.get("chats", []))
+    if not isinstance(items, list):
+        return None, ""
+    want = (name or "").strip().lower()
+    digits = re.sub(r"\D", "", want)
+    prefix: tuple[str | None, str] = (None, "")
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        jid = str(it.get("jid", it.get("phone", it.get("id", ""))))
+        cname = str(it.get("name", it.get("push_name", it.get("title", ""))))
+        if not jid:
+            continue
+        if cname.lower() == want and cname != jid:
+            return jid, cname
+        if digits and digits in re.sub(r"\D", "", jid):
+            return jid, cname or jid
+        if not prefix[0] and cname.lower().startswith(want) and cname != jid:
+            prefix = (jid, cname)
+    return prefix
+
+
+def _resolve_chat(chat_raw: str) -> tuple[str | None, dict]:
+    """Resolve a human chat reference (name/phone/group) to a JID + audit."""
+    raw = (chat_raw or "").strip()
+    if not raw:
+        return None, {"status": "unknown", "reason": "empty chat"}
+    if "@" in raw:  # already a JID
+        return raw, {"status": "jid", "matched": raw}
+    # 1) authoritative chat list first (exact DM/group names, fresh)
+    jid, display = _find_chat_jid(raw)
+    if jid:
+        return jid, {"status": "exact", "matched": display or jid, "score": 100.0, "phone": jid}
+    # 2) NLP contact resolver fallback (phones, saved contacts)
+    resolved = whatsapp_contacts.resolve_contact(raw)
+    status = resolved.get("status")
+    if status in ("exact", "fuzzy", "phone"):
+        return _to_jid(str(resolved.get("phone", raw))), resolved
+    if status == "ambiguous":
+        return None, {"status": "ambiguous", "candidates": resolved.get("candidates", [])}
+    return None, {"status": "unknown_recipient", "to_raw": raw,
+                  "reason": resolved.get("reason", "no match — add contact in Settings or sync wacli")}
+
+def read_messages(chat: str, limit: int = 10, from_them: bool = True,
+                  sync: bool = True) -> dict:
+    """Read recent messages with someone (DM) or a group. Returns newest-first
+    normalized rows plus who it's with."""
+    gate = _require_paired()
+    if gate:
+        return gate
+    try:
+        ensure_follow_sync()
+    except Exception:
+        pass
+    jid, audit = _resolve_chat(chat)
+    if not jid:
+        return {"error": audit.get("reason", "unknown recipient"), "code": audit.get("status", "unknown"), **audit}
+    if sync:
+        _maybe_sync()
+    args = _base_args() + ["messages", "list", "--chat", jid, "--limit", str(max(1, min(limit, 50))), "--json"]
+    if from_them:
+        args.append("--from-them")
+    res = _run(args, timeout=30)
+    if res.get("returncode") != 0:
+        return {"error": (res.get("stderr") or res.get("stdout") or "read failed")[:500], "code": "read_failed"}
+    rows = _parse_rows(res.get("stdout") or "")
+    out: dict = {"status": "ok", "chat": jid, "count": len(rows), "messages": rows, "synced_at": _sync_stamp()}
+    if audit.get("matched"):
+        out["matched"] = audit.get("matched")
+    if audit.get("score") is not None:
+        out["nlp_score"] = audit.get("score")
+    return out
+
+def search_messages(query: str, chat: str | None = None, limit: int = 10) -> dict:
+    """Full-text search across WhatsApp history, optionally within one chat."""
+    gate = _require_paired()
+    if gate:
+        return gate
+    q = (query or "").strip()
+    if not q:
+        return {"error": "Empty search query.", "code": "empty"}
+    try:
+        ensure_follow_sync()
+    except Exception:
+        pass
+    args = _base_args() + ["messages", "search", q, "--limit", str(max(1, min(limit, 50))), "--json"]
+    jid = None
+    if chat:
+        jid, audit = _resolve_chat(chat)
+        if not jid:
+            return {"error": audit.get("reason", "unknown recipient"), "code": audit.get("status", "unknown"), **audit}
+        args += ["--chat", jid]
+    else:
+        _maybe_sync()
+    res = _run(args, timeout=30)
+    if res.get("returncode") != 0:
+        return {"error": (res.get("stderr") or res.get("stdout") or "search failed")[:500], "code": "search_failed"}
+    rows = _parse_rows(res.get("stdout") or "")
+    return {"status": "ok", "query": q, "chat": jid, "count": len(rows), "messages": rows, "synced_at": _sync_stamp()}
+
+def recent_chats(limit: int = 10, sync: bool = True) -> dict:
+    """Latest active chats (DMs + groups) with last-message preview — the
+    basis for 'any new messages?' / unread sweeps."""
+    gate = _require_paired()
+    if gate:
+        return gate
+    try:
+        ensure_follow_sync()
+    except Exception:
+        pass
+    if sync:
+        _maybe_sync()
+    res = _run(_base_args() + ["chats", "list", "--json"], timeout=20)
+    out = (res.get("stdout") or "").strip()
+    if not out or res.get("returncode") != 0:
+        return {"error": "Could not list chats.", "code": "chats_failed"}
+    try:
+        payload = json.loads(out)
+    except Exception:
+        return {"error": "Could not parse chat list.", "code": "parse_failed"}
+    items = payload if isinstance(payload, list) else payload.get("data", payload.get("chats", []))
+    if not isinstance(items, list):
+        return {"error": "Could not parse chat list.", "code": "parse_failed"}
+    chats = []
+    for it in items[: max(1, min(limit, 50))]:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name", it.get("push_name", it.get("title", ""))))
+        jid = str(it.get("jid", it.get("phone", it.get("id", ""))))
+        if name == jid:
+            name = ""  # unresolved name — display falls back to number below
+        chats.append({
+            "name": name or jid.split("@")[0],
+            "jid": jid,
+            "kind": str(it.get("kind", "group" if jid.endswith("@g.us") else "dm")),
+            "unread": bool(it.get("unread", False)),
+            "unread_count": it.get("unread_count", 0),
+            "last_active": _fmt_ts(str(it.get("last_message_ts", it.get("last_active", it.get("lastActive", it.get("updated_at", "")))))),
+        })
+    return {"status": "ok", "count": len(chats), "chats": chats, "synced_at": _sync_stamp()}
+
+async def read_messages_async(chat: str, limit: int = 10, from_them: bool = True) -> dict:
+    return await asyncio.to_thread(read_messages, chat, limit, from_them)
+
+async def search_messages_async(query: str, chat: str | None = None, limit: int = 10) -> dict:
+    return await asyncio.to_thread(search_messages, query, chat, limit)
+
+async def recent_chats_async(limit: int = 10) -> dict:
+    return await asyncio.to_thread(recent_chats, limit)
 
 
 # --- One-click wacli installer (GitHub releases → ~/.woxus/bin) ---

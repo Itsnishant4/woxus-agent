@@ -713,10 +713,213 @@ def _whatsapp_preview_text(matched: str, phone: str, score: float, message: str)
     )
 
 
+_WHATSAPP_READ_PATTERNS = [
+    # read my whatsapp / check whatsapp / any new messages (recent sweep)
+    (re.compile(r"\b(?:read|check|open)\s+(?:my\s+)?whatsapp(?:\s+messages?)?\b", re.IGNORECASE),
+     "recent"),
+    (re.compile(r"\bany\s+(?:new\s+)?(?:whatsapp\s+)?messages?\b", re.IGNORECASE),
+     "recent"),
+    # what did kunal send / read messages from kunal / show kunal's messages
+    (re.compile(r"what\s+did\s+(?P<chat>[A-Za-z0-9_+\-.\s]{1,60}?)\s+(?:send|say|message|text)(?:\s+me)?\s*[?!.\s]*$", re.IGNORECASE),
+     "read"),
+    (re.compile(r"(?:read|show|check|get)\s+(?:my\s+|the\s+)?(?:whatsapp\s+)?messages?\s+(?:from|of|with)\s+(?P<chat>[A-Za-z0-9_+\-.\s]{1,60}?)\s*$", re.IGNORECASE),
+     "read"),
+    (re.compile(r"(?:read|show)\s+(?P<chat>[A-Za-z0-9_+\-.]+?)'s\s+(?:whatsapp\s+)?messages?\s*$", re.IGNORECASE),
+     "read"),
+    (re.compile(r"any\s+(?:new\s+)?messages?\s+from\s+(?P<chat>[A-Za-z0-9_+\-.\s]{1,60}?)\s*$", re.IGNORECASE),
+     "read"),
+    # find / search whatsapp for <query>
+    (re.compile(r"(?:find|search)(?:\s+my|\s+the)?\s+whatsapp\s+(?:for\s+|messages?\s+(?:about|with)\s+)?(?P<q>.+?)\s*$", re.IGNORECASE),
+     "search"),
+    # find <query> on whatsapp
+    (re.compile(r"(?:find|search)\s+(?P<q>.+?)\s+on\s+whatsapp\s*$", re.IGNORECASE),
+     "search"),
+]
+
+
+def _parse_whatsapp_read(prompt: str) -> tuple | None:
+    """Deterministic WhatsApp READ intent. Returns ('recent',) |
+    ('read', chat) | ('search', query) or None."""
+    text = (prompt or "").strip()
+    low = text.lower()
+    if not text or ("whatsapp" not in low and "message" not in low and "sent" not in low and "send" not in low):
+        return None
+    for pat, kind in _WHATSAPP_READ_PATTERNS:
+        m = pat.search(text)
+        if not m:
+            continue
+        if kind == "recent":
+            return ("recent",)
+        if kind == "read":
+            chat = (m.groupdict().get("chat") or "").strip().strip("\"'“” ")
+            if chat:
+                return ("read", chat)
+        if kind == "search":
+            q = (m.groupdict().get("q") or "").strip().strip("\"'“” ")
+            if q:
+                return ("search", q)
+    return None
+
+
+def _fmt_wa_rows(rows: list, limit: int = 5) -> str:
+    lines = []
+    for r in (rows or [])[:limit]:
+        who = r.get("sender") or ("me" if r.get("from_me") else r.get("chat_name") or r.get("chat", "?"))
+        ts = f" [{r.get('timestamp')}]" if r.get("timestamp") else ""
+        txt = (r.get("text") or "").strip()
+        if txt:
+            lines.append(f"- {who}{ts}: {txt[:300]}")
+    return "\n".join(lines)
+
+
+_WHATSAPP_REPLY_PATTERNS = [
+    # reply to kunal "got it" / reply to a kunal? / can you please reply to kunal
+    re.compile(r"\brepl(?:y|ied)?\s+(?:to\s+)?(?:a\s+|an\s+|the\s+)?(?P<chat>[A-Za-z0-9_+\-.]+)(?:\s+[\"'“”](?P<msg>.+?)[\"'“”])?\s*[?!.\s]*$", re.IGNORECASE | re.DOTALL),
+    # answer kunal "ok" on whatsapp
+    re.compile(r"\banswer\s+(?P<chat>[A-Za-z0-9_+\-.]+)(?:\s+on\s+whatsapp)?(?:\s+[\"'“”](?P<msg>.+?)[\"'“”])?\s*[?!.\s]*$", re.IGNORECASE | re.DOTALL),
+]
+
+
+def _parse_whatsapp_reply(prompt: str) -> tuple | None:
+    """Returns ('reply', chat, msg|None) or None. Read-first: the handler
+    always reads the chat before sending."""
+    text = (prompt or "").strip()
+    if not text or ("repl" not in text.lower() and "answer" not in text.lower()):
+        return None
+    for pat in _WHATSAPP_REPLY_PATTERNS:
+        m = pat.search(text)
+        if not m:
+            continue
+        chat = (m.groupdict().get("chat") or "").strip().strip("\"'“” ")
+        if not chat or len(chat) > 60:
+            continue
+        msg = (m.groupdict().get("msg") or "").strip().strip("\"'“” ")
+        return ("reply", chat, msg or None)
+    return None
+
+
+async def _handle_whatsapp_reply(parsed: tuple, hw_info: dict) -> dict:
+    """Read-first reply: read their latest messages, then send (or ask)."""
+    from . import whatsapp as _wa
+
+    base = {"device": hw_info["device"], "attempts_count": 1,
+            "tools_executed": ["whatsapp_reply"], "execution_trace": []}
+    _, chat, msg = parsed
+    if not _wa.is_installed():
+        out = "wacli is not installed. Install it in Settings → WhatsApp first."
+        return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+    st = _wa.get_status()
+    if not st.get("paired"):
+        out = "WhatsApp is not linked. Open Settings → WhatsApp → Pair / Show QR and scan with your phone first."
+        return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+    read = await asyncio.to_thread(_wa.read_messages, chat, 3, True, True)
+    if read.get("status") != "ok":
+        if read.get("code") == "ambiguous" or read.get("status") == "ambiguous":
+            cands = read.get("candidates", [])[:3]
+            lines = "\n".join(f"{i}. {c.get('name')} ({c.get('phone')}, {c.get('score')}%)" for i, c in enumerate(cands))
+            out = f"Which chat did you mean?\n{lines}\nReply with the number or full name."
+            return {**base, "status": "info", "mini_agent_output": out, "message": out}
+        out = f"Couldn't read that chat: {read.get('error', read.get('reason', 'unknown error'))}"
+        return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+    rows = read.get("messages", [])
+    who = read.get("matched", chat)
+    if not msg:
+        # No reply text given: show what they sent, ask what to say back.
+        if not rows:
+            out = f"No recent incoming messages with {who}. What should I send them?"
+        else:
+            out = f"Here's what {who} sent most recently:\n" + _fmt_wa_rows(rows) + "\nWhat should I reply?"
+        return {**base, "status": "info", "mini_agent_output": out, "message": out}
+    context = _fmt_wa_rows(rows) if rows else "(no recent incoming messages)"
+    res = await asyncio.to_thread(_wa.send_text, read.get("chat"), msg)
+    if res.get("status") == "sent":
+        out = f"{_WHATSAPP_SENT_TAG} Replied to {who} (was replying to:\n{context})."
+        return {**base, "status": "success", "mini_agent_output": out, "message": out}
+    out = f"WhatsApp reply failed: {res.get('error', 'unknown error')}"
+    return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+
+
+async def _handle_whatsapp_read(parsed: tuple, hw_info: dict) -> dict:
+    """Execute a deterministic WhatsApp read. Never invents message content."""
+    from . import whatsapp as _wa
+
+    base = {"device": hw_info["device"], "attempts_count": 1,
+            "tools_executed": ["whatsapp_read"], "execution_trace": []}
+    if not _wa.is_installed():
+        out = "wacli is not installed. Install it in Settings → WhatsApp first."
+        return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+    st = _wa.get_status()
+    if not st.get("paired"):
+        out = "WhatsApp is not linked. Open Settings → WhatsApp → Pair / Show QR and scan with your phone first."
+        return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+
+    kind = parsed[0]
+    if kind == "recent":
+        res = await asyncio.to_thread(_wa.recent_chats, 10, True)
+        if res.get("status") != "ok":
+            out = f"Couldn't list chats: {res.get('error', 'unknown error')}"
+            return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+        chats = res.get("chats", [])
+        if not chats:
+            out = "No recent WhatsApp chats found."
+            return {**base, "status": "info", "mini_agent_output": out, "message": out}
+        lines = []
+        for c in chats[:7]:
+            name = c.get("name") or c.get("jid", "?")
+            unread_n = c.get("unread_count") or 0
+            kind = f" [{c.get('kind')}]" if c.get("kind") == "group" else ""
+            flag = f" ({unread_n} unread)" if unread_n else ""
+            last = f" — active {c.get('last_active')}" if c.get("last_active") else ""
+            lines.append(f"- {name}{kind}{flag}{last}")
+        out = "Recent WhatsApp chats:\n" + "\n".join(lines)
+        return {**base, "status": "success", "mini_agent_output": out, "message": out}
+
+    if kind == "search":
+        res = await asyncio.to_thread(_wa.search_messages, parsed[1], None, 10)
+        if res.get("status") != "ok":
+            out = f"Search failed: {res.get('error', 'unknown error')}"
+            return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+        rows = res.get("messages", [])
+        if not rows:
+            out = f"No WhatsApp messages found for \"{parsed[1]}\"."
+            return {**base, "status": "info", "mini_agent_output": out, "message": out}
+        out = f"WhatsApp matches for \"{parsed[1]}\":\n" + _fmt_wa_rows(rows)
+        return {**base, "status": "success", "mini_agent_output": out, "message": out}
+
+    # kind == "read"
+    res = await asyncio.to_thread(_wa.read_messages, parsed[1], 10, True, True)
+    if res.get("status") != "ok":
+        if res.get("code") == "ambiguous":
+            cands = res.get("candidates", [])[:3]
+            lines = "\n".join(f"{i}. {c.get('name')} ({c.get('phone')}, {c.get('score')}%)" for i, c in enumerate(cands))
+            out = f"Which chat did you mean?\n{lines}\nReply with the number or full name."
+            return {**base, "status": "info", "mini_agent_output": out, "message": out}
+        out = f"Couldn't read that chat: {res.get('error', res.get('reason', 'unknown error'))}"
+        return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+    rows = res.get("messages", [])
+    who = res.get("matched", parsed[1])
+    if not rows:
+        out = f"No recent incoming WhatsApp messages with {who}."
+        return {**base, "status": "info", "mini_agent_output": out, "message": out}
+    out = f"Recent messages with {who}:\n" + _fmt_wa_rows(rows)
+    return {**base, "status": "success", "mini_agent_output": out, "message": out}
+
+
 async def _handle_whatsapp_prompt(prompt: str, history: list | None, hw_info: dict) -> dict | None:
     """Deterministic WhatsApp flow. Returns response dict or None when N/A."""
     from . import whatsapp as _wa
     from .whatsapp_contacts import resolve_contact
+
+    # 0) Read path first — "read my whatsapp", "what did X send", searches.
+    # Never invents content: everything comes from wacli.
+    parsed_read = _parse_whatsapp_read(prompt)
+    if parsed_read is not None:
+        return await _handle_whatsapp_read(parsed_read, hw_info)
+
+    # 0b) Reply path — "reply to X": read their messages FIRST, then send.
+    parsed_reply = _parse_whatsapp_reply(prompt)
+    if parsed_reply is not None:
+        return await _handle_whatsapp_reply(parsed_reply, hw_info)
 
     # 1) Affirmation completes a pending preview from history
     if _is_affirmation(prompt):

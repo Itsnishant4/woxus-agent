@@ -177,8 +177,7 @@ class GeminiLiveService:
                 self.conversation_log = self.conversation_log[-(MAX_HISTORY_TURNS * 2):]
 
     def _history_turns(self) -> list[dict]:
-        """Build history turns (user/model alternating, no leading model turns).
-        Capped at the last 3 exchanges so reconnect replay stays fast."""
+        """Build history turns (user/model alternating, no leading model turns)."""
         turns = []
         for entry in self.conversation_log:
             text = (entry.get("text") or "").strip()
@@ -188,9 +187,6 @@ class GeminiLiveService:
                 "role": entry["role"],
                 "parts": [{"text": text}],
             })
-        while turns and turns[0]["role"] == "model":
-            turns.pop(0)
-        turns = turns[-6:]
         while turns and turns[0]["role"] == "model":
             turns.pop(0)
         return turns
@@ -205,6 +201,7 @@ class GeminiLiveService:
         transcription_callback: Callable[[str, str], Awaitable[Any]] | None = None,
         latency_callback: Callable[[str, float], Awaitable[Any]] | None = None,
         tool_result_callback: Callable[[str, Any], Awaitable[Any]] | None = None,
+        tool_start_callback: Callable[[str, str], Awaitable[Any]] | None = None,
     ):
         """Open a Gemini Live session and run send/receive loops.
 
@@ -229,6 +226,7 @@ class GeminiLiveService:
                 transcription_callback=transcription_callback,
                 latency_callback=latency_callback,
                 tool_result_callback=tool_result_callback,
+                tool_start_callback=tool_start_callback,
                 replay_history=replay_history,
             )
             if self._stop_requested or not died_with_error or attempt >= max_retries:
@@ -250,6 +248,7 @@ class GeminiLiveService:
         transcription_callback: Callable[[str, str], Awaitable[Any]] | None,
         latency_callback: Callable[[str, float], Awaitable[Any]] | None,
         tool_result_callback: Callable[[str, Any], Awaitable[Any]] | None,
+        tool_start_callback: Callable[[str, str], Awaitable[Any]] | None = None,
         replay_history: bool = False,
     ) -> bool:
         """Run one session attempt. Returns True if the session died with an
@@ -319,7 +318,6 @@ class GeminiLiveService:
         self._last_user_input_text = ""
         self._turn_start = 0.0
         self._last_audio_sent_time = None
-        self._last_input_ts = None
 
         mime_type = f"audio/pcm;rate={self.input_sample_rate}"
 
@@ -469,7 +467,6 @@ class GeminiLiveService:
                 user_speech = in_trans.text
                 self._append_to_log("user", user_speech)
                 self._last_user_input_text = user_speech
-                self._last_input_ts = time.time()
                 if self._user_input_time is None or self._has_logged_turn_latency:
                     self._user_input_time = time.time()
                     self._has_logged_turn_latency = False
@@ -489,14 +486,12 @@ class GeminiLiveService:
                 latency_ms = (time.time() - baseline) * 1000
                 latency_sec = latency_ms / 1000
                 self._has_logged_turn_latency = True
-                turn_close_wait = (time.time() - self._last_input_ts) if self._last_input_ts else 0.0
                 user_label = self._last_user_input_text or "speech input"
                 logger.info(
-                    "⏱️ [LATENCY LOG] Woxus response time for '%s': %.2f ms (%.2f s) | turn-close wait %.1fs",
+                    "⏱️ [LATENCY LOG] Woxus response time for '%s': %.2f ms (%.2f s)",
                     user_label,
                     latency_ms,
                     latency_sec,
-                    turn_close_wait,
                 )
                 if latency_callback:
                     await latency_callback(user_label, latency_ms)
@@ -584,6 +579,14 @@ class GeminiLiveService:
         async def _handle_tool_call(tc):
             function_calls = tc.function_calls
             responses = []
+
+            async def notify_start(name: str, label: str = ""):
+                if tool_start_callback:
+                    try:
+                        await tool_start_callback(name, label)
+                    except Exception as e:
+                        logger.debug("tool_start_callback failed: %s", e)
+
             for fc in function_calls:
                 fn_name = fc.name
                 fn_id = fc.id
@@ -611,6 +614,7 @@ class GeminiLiveService:
                         continue
                     label = str(fn_args.get("label") or task_prompt[:60])
                     task = submit_delegation(task_prompt, label)
+                    await notify_start(fn_name, label)
                     responses.append(types.FunctionResponse(
                         name=fn_name,
                         id=fn_id,
@@ -646,6 +650,7 @@ class GeminiLiveService:
                             str(it.get("label") or it["task_prompt"][:60]),
                         )
                         tids.append(t.task_id)
+                    await notify_start(fn_name, f"{len(tids)} tasks")
                     responses.append(types.FunctionResponse(
                         name=fn_name,
                         id=fn_id,
@@ -662,6 +667,7 @@ class GeminiLiveService:
 
                 # Fast tools (read/status/memory) run inline — the conversation
                 # benefits from the result immediately.
+                await notify_start(fn_name)
                 result = await handle_tool_call(fn_name, fn_args)
                 responses.append(types.FunctionResponse(
                     name=fn_name,

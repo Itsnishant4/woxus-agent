@@ -141,6 +141,14 @@ async def handle_tool_call(name: str, args: dict) -> dict:
             return _memory_delete(args)
         elif name == "whatsapp_send":
             return await _whatsapp_send(args)
+        elif name == "whatsapp_read":
+            return await _whatsapp_read(args)
+        elif name == "whatsapp_search":
+            return await _whatsapp_search(args)
+        elif name == "whatsapp_recent":
+            return await _whatsapp_recent(args)
+        elif name == "whatsapp_reply":
+            return await _whatsapp_reply(args)
         else:
             return {"error": f"Unknown tool: {name}"}
     except Exception as e:
@@ -407,6 +415,87 @@ async def _whatsapp_send(args: dict) -> dict:
     if status == "ambiguous":
         return {"status": "needs_pick", "candidates": resolved.get("candidates", []), "score": resolved.get("score")}
     return {"status": "unknown_recipient", "to_raw": to_raw, "candidates": resolved.get("candidates", [])}
+
+
+async def _whatsapp_read(args: dict) -> dict:
+    chat = str(args.get("chat", args.get("to_raw", args.get("to", ""))) or "").strip()
+    if not chat:
+        return {"error": "chat required (name, phone, or group)"}
+    try:
+        from . import whatsapp as wa
+    except Exception as e:
+        return {"error": f"whatsapp backend unavailable: {e}"}
+    limit = args.get("limit", 10)
+    try:
+        limit = max(1, min(int(limit), 50))
+    except Exception:
+        limit = 10
+    return await wa.read_messages_async(chat, limit, bool(args.get("from_them", True)))
+
+
+async def _whatsapp_search(args: dict) -> dict:
+    query = str(args.get("query", args.get("q", "")) or "").strip()
+    if not query:
+        return {"error": "query required"}
+    try:
+        from . import whatsapp as wa
+    except Exception as e:
+        return {"error": f"whatsapp backend unavailable: {e}"}
+    chat = str(args.get("chat", "") or "").strip() or None
+    limit = args.get("limit", 10)
+    try:
+        limit = max(1, min(int(limit), 50))
+    except Exception:
+        limit = 10
+    return await wa.search_messages_async(query, chat, limit)
+
+
+async def _whatsapp_recent(args: dict) -> dict:
+    try:
+        from . import whatsapp as wa
+    except Exception as e:
+        return {"error": f"whatsapp backend unavailable: {e}"}
+    limit = args.get("limit", 10)
+    try:
+        limit = max(1, min(int(limit), 50))
+    except Exception:
+        limit = 10
+    return await wa.recent_chats_async(limit)
+
+
+async def _whatsapp_reply(args: dict) -> dict:
+    """Read-first reply: ALWAYS read the chat's latest incoming messages
+    first, then send the reply grounded in that context. If no message text
+    is given, return what they sent so the agent can ask what to reply."""
+    chat = str(args.get("chat", args.get("to_raw", args.get("to", ""))) or "").strip()
+    message = str(args.get("message", "") or "").strip()
+    if not chat:
+        return {"error": "chat required (name, phone, or group)"}
+    try:
+        from . import whatsapp as wa
+    except Exception as e:
+        return {"error": f"whatsapp backend unavailable: {e}"}
+    read = await wa.read_messages_async(chat, 3, True)
+    if read.get("status") != "ok":
+        return read  # unknown/ambiguous/needs_login flows through
+    last = read.get("messages", [])
+    context = [
+        {"sender": m.get("sender"), "timestamp": m.get("timestamp"), "text": m.get("text")}
+        for m in last
+    ]
+    who = read.get("matched", chat)
+    if not message:
+        return {
+            "status": "need_message",
+            "chat": who,
+            "reply_to": context,
+            "message": f"Here is what {who} sent most recently. Ask the user what to reply.",
+        }
+    sent = await wa.send_text_async(read.get("chat"), message)
+    if isinstance(sent, dict):
+        sent["reply_to"] = context
+        sent["matched"] = who
+    return sent
 
 
 # --- Memory ---

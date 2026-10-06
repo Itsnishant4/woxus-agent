@@ -292,7 +292,114 @@ whatsapp_send_declaration = types.FunctionDeclaration(
     ),
 )
 
+# --- WhatsApp read tools (wacli local DB backed) ---
+
+whatsapp_read_declaration = types.FunctionDeclaration(
+    name="whatsapp_read",
+    description=(
+        "Read recent WhatsApp messages with someone (DM) or a group. "
+        "Args: chat (verbatim name/phone/group from user), limit (default 10), "
+        "from_them (default true = only received messages). "
+        "Resolves the name via NLP, syncs fresh messages, returns newest-first "
+        "rows with sender + timestamp. Use when the user asks what someone sent, "
+        "to read chats, or to check for new messages."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "chat": types.Schema(
+                type=types.Type.STRING,
+                description="Verbatim chat reference from user (name, phone, or group).",
+            ),
+            "limit": types.Schema(
+                type=types.Type.INTEGER,
+                description="Max messages to return.",
+                default=10,
+            ),
+            "from_them": types.Schema(
+                type=types.Type.BOOLEAN,
+                description="Only received messages (default true).",
+                default=True,
+            ),
+        },
+        required=["chat"],
+    ),
+)
+
+whatsapp_search_declaration = types.FunctionDeclaration(
+    name="whatsapp_search",
+    description=(
+        "Full-text search across WhatsApp history, optionally within one chat. "
+        "Args: query, chat (optional verbatim name/phone/group), limit. "
+        "Use when the user asks to find a message about something."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "query": types.Schema(
+                type=types.Type.STRING,
+                description="Text to search for.",
+            ),
+            "chat": types.Schema(
+                type=types.Type.STRING,
+                description="Optional chat to search within.",
+            ),
+            "limit": types.Schema(
+                type=types.Type.INTEGER,
+                description="Max results.",
+                default=10,
+            ),
+        },
+        required=["query"],
+    ),
+)
+
+whatsapp_reply_declaration = types.FunctionDeclaration(
+    name="whatsapp_reply",
+    description=(
+        "Reply to someone on WhatsApp READ-FIRST: reads their latest incoming "
+        "messages, then sends your reply grounded in that context. "
+        "Args: chat (verbatim name/phone/group), message (reply text; omit to "
+        "just see what they sent so you can ask the user what to reply). "
+        "ALWAYS use this instead of whatsapp_send when the user says 'reply "
+        "to X' — never reply blind."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "chat": types.Schema(
+                type=types.Type.STRING,
+                description="Verbatim chat reference from user (name, phone, or group).",
+            ),
+            "message": types.Schema(
+                type=types.Type.STRING,
+                description="Reply text. Omit to only read what they sent.",
+            ),
+        },
+        required=["chat"],
+    ),
+)
+
 # --- Tool list for registering with Gemini Main Agent ---
+
+whatsapp_recent_declaration = types.FunctionDeclaration(
+    name="whatsapp_recent",
+    description=(
+        "List recently active WhatsApp chats (DMs + groups) with last-message "
+        "preview and unread counts. Use for 'any new messages?', unread sweeps, "
+        "or to find which chat the user means."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "limit": types.Schema(
+                type=types.Type.INTEGER,
+                description="Max chats to return.",
+                default=10,
+            ),
+        },
+    ),
+)
 #
 # The main agent delegates computer tasks to the mini agent, AND can save /
 # read long-term memory via the memory tools. This is how Woxus learns facts
@@ -308,5 +415,9 @@ agent_tools = [
         memory_create_declaration,
         memory_list_declaration,
         whatsapp_send_declaration,
+        whatsapp_read_declaration,
+        whatsapp_search_declaration,
+        whatsapp_recent_declaration,
+        whatsapp_reply_declaration,
     ]),
 ]

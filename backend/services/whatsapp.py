@@ -54,30 +54,97 @@ _pair_started_at: float = 0.0
 _PAIR_CODE_RE = re.compile(r"^[A-Z0-9]{4}-[A-Z0-9]{4}$|^[A-Z0-9]{8}$")
 
 
+def _list_wacli_pids(pattern: str) -> list[int]:
+    """PIDs of running wacli processes matching pattern — portable.
+
+    POSIX uses pgrep; Windows uses tasklist (pgrep doesn't exist there).
+    Never raises; returns [] when the platform tool is missing.
+    """
+    import sys as _sys
+
+    if os.name == "nt":
+        try:
+            r = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq wacli.exe", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=10,
+            )
+            pids: list[int] = []
+            for line in (r.stdout or "").splitlines():
+                parts = [p.strip().strip('"') for p in line.split(",")]
+                if len(parts) >= 2 and parts[0].lower() == "wacli.exe":
+                    try:
+                        pids.append(int(parts[1]))
+                    except ValueError:
+                        pass
+            if pattern not in ("wacli", "wacli.exe"):
+                # tasklist can't filter by args — refine via wmic when present
+                try:
+                    w = subprocess.run(
+                        ["wmic", "process", "where", "name='wacli.exe'",
+                         "get", "ProcessId,CommandLine", "/FORMAT:CSV"],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    refined = []
+                    for line in (w.stdout or "").splitlines():
+                        if pattern in line:
+                            tail = line.strip().split(",")[-1].strip()
+                            try:
+                                refined.append(int(tail))
+                            except ValueError:
+                                pass
+                    return refined or pids
+                except Exception:
+                    return pids
+            return pids
+        except Exception:
+            return []
+    try:
+        r = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True, timeout=5)
+    except Exception:
+        return []
+    out = []
+    for pid_s in (r.stdout or "").split():
+        try:
+            out.append(int(pid_s))
+        except ValueError:
+            pass
+    return out
+
+
+def _terminate_pid(pid: int, tag: str) -> bool:
+    """Best-effort terminate (SIGTERM → taskkill fallback on Windows)."""
+    try:
+        if os.name == "nt":
+            r = subprocess.run(["taskkill", "/PID", str(pid)], capture_output=True, text=True, timeout=10)
+            if r.returncode == 0:
+                logger.info("[wacli-pair] killed stale %s proc %d", tag, pid)
+                return True
+            return False
+        os.kill(pid, signal.SIGTERM)
+        logger.info("[wacli-pair] killed stale %s proc %d", tag, pid)
+        return True
+    except Exception:
+        return False
+
+
+def _kill_stale_wacli(pattern: str, tag: str):
+    """Kill orphaned wacli processes (e.g. left behind by a backend restart).
+    A stale holder keeps the store LOCKED so fresh codes/logouts fail."""
+    me = os.getpid()
+    killed = False
+    for pid in _list_wacli_pids(pattern):
+        if pid == me:
+            continue
+        if _terminate_pid(pid, tag):
+            killed = True
+    if killed:
+        time.sleep(1.5)  # let the store LOCK release before spawning
+
+
 def _kill_stale_auth_procs():
     """Kill orphaned `wacli auth` processes (e.g. left behind by a backend
     restart). A stale holder keeps the store LOCKED so fresh codes are dead."""
-    try:
-        r = subprocess.run(["pgrep", "-f", "wacli auth"], capture_output=True, text=True, timeout=5)
-    except Exception:
-        return
-    me = os.getpid()
-    killed = False
-    for pid_s in (r.stdout or "").split():
-        try:
-            pid = int(pid_s)
-        except ValueError:
-            continue
-        if pid == me:
-            continue
-        try:
-            os.kill(pid, signal.SIGTERM)
-            killed = True
-            logger.info("[wacli-pair] killed stale auth proc %d", pid)
-        except Exception:
-            pass
-    if killed:
-        time.sleep(1.5)  # let the store LOCK release before spawning
+    _kill_stale_wacli("wacli auth", "auth")
 
 
 def _wacli_bin() -> str | None:
@@ -285,6 +352,12 @@ def pair_start(phone: str | None = None) -> dict:
         bin_path = _wacli_bin()
         if not bin_path:
             return {"status": "error", "error": "wacli not installed"}
+        # Exclusive store access: stop follow-sync + reap orphans first, or
+        # `wacli auth` fails on a locked store and no QR is ever emitted.
+        try:
+            stop_follow_sync()
+        except Exception:
+            pass
         _kill_stale_auth_procs()
         digits = re.sub(r"\D", "", phone or "")
         use_phone = bool(digits) and 8 <= len(digits) <= 15
@@ -319,89 +392,109 @@ def pair_start(phone: str | None = None) -> dict:
     return {"status": "waiting", "mode": "qr", "hint": "Scan QR in WhatsApp → Linked devices. Poll /pair/qr."}
 
 
+def _pair_handle_line(t: str):
+    """Process one stdout/stderr line from `wacli auth`. Shared by the
+    blocking reader threads below. Returns True when pairing resolved."""
+    global _pair_qr, _pair_code, _pair_status, _pair_error
+    t = (t or "").strip()
+    if not t:
+        return False
+    # NDJSON lifecycle events on stderr (qr_code, pair_code, paired…).
+    if t.startswith("{"):
+        try:
+            ev = json.loads(t)
+        except Exception:
+            ev = None
+        if isinstance(ev, dict):
+            etype = str(ev.get("event", "")).lower()
+            data = ev.get("data")
+            payload = data.get("code") if isinstance(data, dict) else (data if isinstance(data, str) else "")
+            if etype == "qr_code" and payload:
+                _pair_qr = str(payload)
+            elif etype == "pair_code" and payload:
+                _pair_code = str(payload).upper()
+            elif etype in ("paired", "authenticated", "success", "login_success"):
+                _pair_status = "paired"
+                return True
+            elif etype == "error":
+                msg = str(data.get("message", data) if isinstance(data, dict) else data)
+                if "locked" in msg.lower():
+                    _pair_status = "error"
+                    _pair_error = "WhatsApp store is locked by another pairing — tap Pair again (stale sessions auto-clear)."
+                    return True
+            return False
+        # not JSON we understand — fall through to text heuristics
+    # standalone pairing code on stdout (XXXX-XXXX)
+    if _PAIR_CODE_RE.match(t):
+        _pair_code = t.upper()
+        return False
+    # raw QR payload heuristic: long string, little spaces
+    if len(t) > 40 and " " not in t.strip()[:60]:
+        _pair_qr = t
+    if "paired" in t.lower() or "authenticated" in t.lower() or "bootstrap sync" in t.lower():
+        _pair_status = "paired"
+        return True
+    if "expired" in t.lower() or "invalid qr" in t.lower():
+        _pair_status = "expired"
+        _pair_error = t[:300]
+        return True
+    return False
+
+
+def _pair_stream_reader(stream, done: threading.Event):
+    """Blocking readline loop — portable (no select()), works on Windows."""
+    try:
+        while not done.is_set():
+            try:
+                line = stream.readline()
+            except Exception:
+                break
+            if not line:
+                break  # EOF: process exited
+            try:
+                if _pair_handle_line(line):
+                    done.set()
+                    break
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 def _pair_watcher():
-    global _pair_proc, _pair_qr, _pair_code, _pair_status, _pair_error
+    global _pair_proc, _pair_status, _pair_error
     assert _pair_proc is not None
     proc = _pair_proc
+    done = threading.Event()
+    readers = []
     try:
-        # read both streams line-wise; QR payload lines are long alnum blobs
-        import selectors
-
-        # simple poll loop: non-blocking readline with timeout
+        for stream in (proc.stdout, proc.stderr):
+            if stream is None:
+                continue
+            t = threading.Thread(target=_pair_stream_reader, args=(stream, done), daemon=True)
+            t.start()
+            readers.append(t)
+        # Wait for resolution, proc exit, or the 180s QR lifetime.
         start = time.time()
-        while proc.poll() is None and time.time() - start < 180:
-            line = ""
-            try:
-                import select
-
-                # stdout first
-                if proc.stdout and select.select([proc.stdout], [], [], 0.5)[0]:
-                    line = proc.stdout.readline() or ""
-                elif proc.stderr and select.select([proc.stderr], [], [], 0.2)[0]:
-                    line = proc.stderr.readline() or ""
-                else:
-                    time.sleep(0.3)
-                    continue
-            except Exception:
-                time.sleep(0.3)
-                continue
-            t = line.strip()
-            if not t:
-                continue
-            # NDJSON lifecycle events on stderr (qr_code, pair_code, paired…).
-            if t.startswith("{"):
-                try:
-                    ev = json.loads(t)
-                except Exception:
-                    ev = None
-                if isinstance(ev, dict):
-                    etype = str(ev.get("event", "")).lower()
-                    data = ev.get("data")
-                    payload = data.get("code") if isinstance(data, dict) else (data if isinstance(data, str) else "")
-                    if etype == "qr_code" and payload:
-                        _pair_qr = str(payload)
-                    elif etype == "pair_code" and payload:
-                        _pair_code = str(payload).upper()
-                    elif etype in ("paired", "authenticated", "success", "login_success"):
-                        _pair_status = "paired"
-                        break
-                    elif etype == "error":
-                        msg = str(data.get("message", data) if isinstance(data, dict) else data)
-                        if "locked" in msg.lower():
-                            _pair_status = "error"
-                            _pair_error = "WhatsApp store is locked by another pairing — tap Pair again (stale sessions auto-clear)."
-                            break
-                    continue
-                # not JSON we understand — fall through to text heuristics
-            # standalone pairing code on stdout (XXXX-XXXX)
-            if _PAIR_CODE_RE.match(t):
-                _pair_code = t.upper()
-                continue
-            # raw QR payload heuristic: long string, little spaces
-            if len(t) > 40 and " " not in t.strip()[:60]:
-                _pair_qr = t
-            if "paired" in t.lower() or "authenticated" in t.lower() or "bootstrap sync" in t.lower():
-                _pair_status = "paired"
-            if "expired" in t.lower() or "invalid qr" in t.lower():
-                _pair_status = "expired"
-                _pair_error = t[:300]
-        if proc.poll() is None:
-            # timed out waiting
-            pass
-        else:
+        while not done.is_set() and proc.poll() is None and time.time() - start < 180:
+            done.wait(0.5)
+        if not done.is_set() and proc.poll() is None and _pair_status == "waiting" and not _pair_qr and not _pair_code:
+            _pair_status = "error"
+            _pair_error = "No QR received from wacli. The store may be busy — Cancel and tap Pair again."
+        if proc.poll() is not None:
             rc = proc.poll()
             if _pair_status == "waiting":
                 _pair_status = "paired" if rc == 0 else "error"
-                if rc != 0:
-                    try:
-                        err = proc.stderr.read() if proc.stderr else ""  # type: ignore
-                        _pair_error = (err or "")[:500]
-                    except Exception:
-                        pass
+                if rc != 0 and not _pair_error:
+                    _pair_error = f"wacli auth exited (code {rc}) with no QR — tap Pair again."
         if _pair_status == "paired":
             # Pull contact/group names into the NLP cache so voice
             # ("send WhatsApp to kunal…") resolves without manual entry.
             threading.Thread(target=sync_contacts_cache, daemon=True).start()
+            try:
+                ensure_follow_sync()
+            except Exception:
+                pass
     except Exception as e:
         _pair_status = "error"
         _pair_error = str(e)[:500]
@@ -413,7 +506,7 @@ def pair_qr() -> dict:
         return {
             "status": "error",
             "qr_text": "",
-            "error": "wacli is not installed. Install it first (button below or: brew install openclaw/tap/wacli).",
+            "error": "wacli is not installed. Install it first (button below, or: macOS `brew install openclaw/tap/wacli`, Windows: download from github.com/openclaw/wacli).",
             "installed": False,
             "running": False,
         }
@@ -436,6 +529,10 @@ def pair_qr() -> dict:
             _pair_code = ""
         if was_waiting:
             threading.Thread(target=sync_contacts_cache, daemon=True).start()
+            try:
+                ensure_follow_sync()
+            except Exception:
+                pass
         result = {"status": "paired", "qr_text": "", "pair_code": "", "paired": True}
         result.update({k: v for k, v in (("jid", st.get("jid")), ("phone", st.get("phone"))) if v})
         return result
@@ -465,6 +562,13 @@ def pair_cancel() -> dict:
 
 
 def logout() -> dict:
+    # Exclusive store access: a running follow-sync (or stale auth proc)
+    # holds the store lock and would make logout fail.
+    try:
+        stop_follow_sync()
+    except Exception:
+        pass
+    _kill_stale_auth_procs()
     res = _run(_base_args() + ["auth", "logout"], timeout=20)
     if res.get("returncode") == 0:
         return {"status": "logged_out"}
@@ -609,7 +713,7 @@ def follow_status() -> dict:
 
 def _follow_worker():
     backoff = 5.0
-    while True:
+    while not _follow_stop.is_set():
         try:
             bin_path = _wacli_bin()
             if not bin_path:
@@ -625,12 +729,21 @@ def _follow_worker():
                 _follow_state.update({"alive": True, "started_at": time.time(), "last_error": ""})
                 _follow_state["restarts"] += 1
             logger.info("[wacli-follow] starting continuous sync")
+            global _follow_proc
             proc = subprocess.Popen(
                 [bin_path] + (["--account", WACLI_ACCOUNT] if WACLI_ACCOUNT else []) +
                 ["sync", "--follow", "--presence-mode", "quiet"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
+            with _follow_lock:
+                _follow_proc = proc
             proc.wait()
+            with _follow_lock:
+                if _follow_proc is proc:
+                    _follow_proc = None
+            if _follow_stop.is_set():
+                logger.info("[wacli-follow] stopped on request")
+                return
             logger.warning("[wacli-follow] sync exited (rc=%s), restarting in %.0fs", proc.returncode, backoff)
         except Exception as e:
             logger.warning("[wacli-follow] error: %s", e)
@@ -642,6 +755,37 @@ def _follow_worker():
         backoff = min(backoff * 2, 120.0)
 
 _follow_thread: threading.Thread | None = None
+_follow_proc: subprocess.Popen | None = None
+_follow_stop = threading.Event()
+
+
+def stop_follow_sync() -> dict:
+    """Stop the background continuous sync and free the store lock.
+
+    MUST be called before `wacli auth` (pairing) and `wacli auth logout`,
+    which need the store exclusively. Returns whether anything was stopped.
+    """
+    global _follow_proc
+    stopped = False
+    _follow_stop.set()
+    with _follow_lock:
+        proc, _follow_proc = _follow_proc, None
+        _follow_state["alive"] = False
+    if proc is not None and proc.poll() is None:
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=8)
+            except Exception:
+                proc.kill()
+            stopped = True
+            logger.info("[wacli-follow] stopped for exclusive store access")
+        except Exception as e:
+            logger.debug("[wacli-follow] stop failed: %s", e)
+    # Belt and braces: reap orphans from a previous backend instance.
+    _kill_stale_wacli("wacli sync", "sync")
+    time.sleep(1.0)  # let the store LOCK release
+    return {"status": "stopped" if stopped else "was_idle"}
 
 def ensure_follow_sync() -> dict:
     """Start the background continuous sync once (idempotent). Call at
@@ -650,6 +794,7 @@ def ensure_follow_sync() -> dict:
     with _follow_lock:
         if _follow_thread is not None and _follow_thread.is_alive():
             return {"status": "already_running", **follow_status()}
+        _follow_stop.clear()
         _follow_thread = threading.Thread(target=_follow_worker, daemon=True, name="wacli-follow")
         _follow_thread.start()
         return {"status": "started", **follow_status()}

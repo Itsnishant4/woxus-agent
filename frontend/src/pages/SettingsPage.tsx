@@ -376,12 +376,31 @@ function WhatsAppSection() {
         {busy && (
           <button onClick={cancelPair} className="px-4 py-2 rounded-lg bg-accent text-sm">Cancel</button>
         )}
-        <button onClick={async () => { const h = await authHeaders(); await fetch(`${API}/whatsapp/logout`, { method: 'POST', headers: h }); load(); }} className="px-4 py-2 rounded-lg bg-accent text-sm">Logout</button>
+        <button onClick={async () => {
+          try {
+            const h = await authHeaders();
+            const res = await fetch(`${API}/whatsapp/logout`, { method: 'POST', headers: h }).then((r) => r.json());
+            if (res.status === 'logged_out') {
+              setNote('Logged out. Tap Pair / Show QR to link again.');
+            } else {
+              setNote(`Logout failed: ${res.error || 'unknown error'}`);
+            }
+          } catch (e: any) {
+            setNote(`Logout failed: ${e.message || 'no backend connection'}`);
+          }
+          load();
+        }} className="px-4 py-2 rounded-lg bg-accent text-sm">Logout</button>
       </div>
       <div className="flex gap-2 items-center">
         <input value={pairPhone} onChange={(e) => setPairPhone(e.target.value)} placeholder="Can't scan? Your number: +919876543210" className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm" />
         <button onClick={() => startPair(pairPhone)} disabled={busy || status?.installed === false || !pairPhone.trim()} className="px-3 py-2 rounded-lg bg-accent text-sm font-medium disabled:opacity-50">Get code</button>
       </div>
+      {busy && !showQR && !qr?.pair_code && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
+          <span>Starting pairing… waiting for QR from wacli…</span>
+        </div>
+      )}
       {qr?.pair_code && (
         <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 p-4 space-y-1 text-center">
           <p className="text-3xl font-mono font-bold tracking-widest text-foreground">{qr.pair_code}</p>

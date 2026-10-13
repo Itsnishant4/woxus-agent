@@ -41,8 +41,32 @@ jobs:
           name: ${{ matrix.artifact }}
           path: backend/dist/woxus-backend
 
+  prepare-release:
+    # Pre-create the tag + published release in the PUBLIC feed repo BEFORE
+    # the 3 parallel electron-builder jobs run. Without this, all 3 jobs race
+    # POST /repos/.../releases at the same second and the losers die with
+    # 422 "Published releases must have a valid tag" (v0.1.16 arm64).
+    # Idempotent: safe on reruns.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pre-create woxus-releases tag + release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if gh release view "$TAG" --repo Itsnishant4/woxus-releases >/dev/null 2>&1; then
+            echo "release $TAG already exists, skipping create"
+            exit 0
+          fi
+          if ! gh api "repos/Itsnishant4/woxus-releases/git/refs/tags/$TAG" >/dev/null 2>&1; then
+            SHA=$(gh api repos/Itsnishant4/woxus-releases/git/refs/heads/main -q .object.sha)
+            gh api --method POST repos/Itsnishant4/woxus-releases/git/refs -f ref="refs/tags/$TAG" -f sha="$SHA" || true
+          fi
+          VER="${TAG#v}"
+          gh release create "$TAG" --repo Itsnishant4/woxus-releases --title "$VER" --notes "Release $VER" || true
+
   release:
-    needs: build-backend
+    needs: [build-backend, prepare-release]
     strategy:
       fail-fast: false
       matrix:

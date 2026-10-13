@@ -411,6 +411,15 @@ async def run_local_mini_agent(prompt: str) -> dict:
         except Exception as e:
             logger.warning("🤖 [LOCAL MINI AGENT] WhatsApp fast-path failed: %s", e)
 
+    # Open-app deterministic path — "open Calculator", "launch chrome", "start vscode".
+    # Runs BEFORE the direct-shell check so "open X" never becomes a raw `open` command.
+    try:
+        _open_handled = await _handle_open_prompt(prompt, hw_info)
+        if _open_handled is not None:
+            return _open_handled
+    except Exception as e:
+        logger.warning("🤖 [LOCAL MINI AGENT] Open-app fast-path failed: %s", e)
+
     if not direct_cmd:
         # Agentic loop: AI reasons → calls tools → sees results → answers
         from .nano_inference import AGENT_PROMPT, agent_step, is_model_ready
@@ -479,6 +488,28 @@ async def run_local_mini_agent(prompt: str) -> dict:
                     })
                     messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
                     messages.append({"role": "user", "content": f"Tool whatsapp_send result:\n{last_result}\nAnswer the user now using this result."})
+                    continue
+                if tool_name == "open_app":
+                    want = str(args.get("app_name", args.get("app", "")) or "").strip()
+                    if not want:
+                        messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                        messages.append({"role": "user", "content": "That open_app call was empty. Provide the app name."})
+                        continue
+                    tools_executed.append(f"open_app: {want[:40]}")
+                    res = await _execute_tool_raw("open_app", dict({"app_name": want}, _from_mini_agent=True))
+                    last_result = res.get("message") or res.get("error") or str(res)[:500]
+                    ok = res.get("status") == "success"
+                    execution_trace.append({
+                        "attempt": step,
+                        "tool": "open_app",
+                        "command": want[:80],
+                        "exit_code": 0 if ok else 1,
+                        "stdout": last_result,
+                        "stderr": "",
+                        "status": "success" if ok else "failed",
+                    })
+                    messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                    messages.append({"role": "user", "content": f"Tool open_app result:\n{last_result}\nAnswer the user now using this result."})
                     continue
                 if tool_name == "write_to_focused_input":
                     text = str(args.get("text") or "").strip()
@@ -973,6 +1004,76 @@ async def _handle_whatsapp_prompt(prompt: str, history: list | None, hw_info: di
     return {"status": "info", "device": hw_info["device"], "prompt": prompt, "attempts_count": 0, "tools_executed": [], "execution_trace": [], "mini_agent_output": out, "message": out}
 
 
+# --- Open-app deterministic path (macOS + cross-platform) ---
+# The mini agent used to guess `open -a <name>` shell syntax, which fails for
+# inexact names ("chrome" vs "Google Chrome"), articles ("open the calculator"),
+# and never verified the launch. Parse the intent here and run the open_app tool.
+
+_OPEN_PATTERNS = [
+    re.compile(r"^(?:please\s+)?(?:open|launch|start|show|run)\s+(?:a\s+|an\s+|the\s+|my\s+)?(?P<app>.+?)\s*$", re.IGNORECASE | re.DOTALL),
+]
+
+_OPEN_PRONOUNS = {"it", "that", "this", "them", "those", "here", "there"}
+
+
+def _parse_open_request(prompt: str) -> str | None:
+    """Deterministic open-app intent. Returns cleaned app name or None."""
+    text = (prompt or "").strip()
+    if not text:
+        return None
+    low = text.lower()
+    # WhatsApp reads ("open my whatsapp") belong to the WhatsApp path.
+    if "whatsapp" in low:
+        return None
+    # Skip code blocks / multi-line shell dumps — those are terminal tasks.
+    if "```" in text or "\n" in text.strip():
+        return None
+    for pat in _OPEN_PATTERNS:
+        m = pat.search(text)
+        if not m:
+            continue
+        from .open_app import clean_app_name
+
+        name = clean_app_name(m.group("app") or "")
+        if not name or len(name) > 80:
+            continue
+        if name.lower() in _OPEN_PRONOUNS:
+            continue
+        # File paths ("open ~/Desktop/x.txt") still route to open_app (it opens files too).
+        return name
+    return None
+
+
+async def _handle_open_prompt(prompt: str, hw_info: dict) -> dict | None:
+    """Run the open_app tool for a parsed request. None when N/A."""
+    name = _parse_open_request(prompt)
+    if not name:
+        return None
+    from .tool_executor import _execute_tool_raw
+
+    res = await _execute_tool_raw("open_app", {"app_name": name, "_from_mini_agent": True})
+    base = {
+        "device": hw_info["device"],
+        "prompt": prompt,
+        "attempts_count": 1,
+        "tools_executed": [f"open_app: {name}"],
+        "execution_trace": [{
+            "attempt": 1,
+            "tool": "open_app",
+            "command": name,
+            "exit_code": 0 if res.get("status") == "success" else 1,
+            "stdout": res.get("message") or res.get("error") or "",
+            "stderr": "" if res.get("status") == "success" else (res.get("error") or ""),
+            "status": "success" if res.get("status") == "success" else "failed",
+        }],
+    }
+    if res.get("status") == "success":
+        out = res.get("message") or f"Opened {res.get('app', name)}."
+        return {**base, "status": "success", "mini_agent_output": out, "message": out}
+    out = res.get("error") or f"Could not open {name}."
+    return {**base, "status": "failed", "mini_agent_output": out, "message": out}
+
+
 # Absolute safety kill-switch for the unbounded overlay agent loop (never hit in practice)
 OVERLAY_AGENT_MAX_STEPS = 50
 # Trim history once it exceeds this many characters (rough guard against context overflow)
@@ -1024,6 +1125,14 @@ async def run_overlay_agent(prompt: str, history: list | None = None) -> dict:
             return wa_handled
     except Exception as e:
         logger.warning("🤖 [OVERLAY AGENT] WhatsApp fast-path failed: %s", e)
+
+    # Deterministic open-app path — same resolver as the mini agent.
+    try:
+        open_handled = await _handle_open_prompt(prompt, hw_info)
+        if open_handled is not None:
+            return open_handled
+    except Exception as e:
+        logger.warning("🤖 [OVERLAY AGENT] Open-app fast-path failed: %s", e)
 
     import json as _json
 
@@ -1102,6 +1211,28 @@ async def run_overlay_agent(prompt: str, history: list | None = None) -> dict:
                 })
                 messages.append({"role": "assistant", "content": _json.dumps(decision)})
                 messages.append({"role": "user", "content": f"Tool whatsapp_send result:\n{last_result}\nAnswer the user now using this result."})
+                continue
+            if tool_name == "open_app":
+                want = str(tool_args.get("app_name", tool_args.get("app", "")) or "").strip()
+                if not want:
+                    messages.append({"role": "assistant", "content": _json.dumps(decision or {})})
+                    messages.append({"role": "user", "content": "That open_app call was empty. Provide the app name."})
+                    continue
+                tools_executed.append(f"open_app: {want[:40]}")
+                res = await _execute_tool_raw("open_app", dict({"app_name": want}, _from_mini_agent=True))
+                last_result = res.get("message") or res.get("error") or str(res)[:500]
+                ok = res.get("status") == "success"
+                execution_trace.append({
+                    "attempt": step,
+                    "tool": "open_app",
+                    "command": want[:80],
+                    "exit_code": 0 if ok else 1,
+                    "stdout": last_result,
+                    "stderr": "",
+                    "status": "success" if ok else "failed",
+                })
+                messages.append({"role": "assistant", "content": _json.dumps(decision)})
+                messages.append({"role": "user", "content": f"Tool open_app result:\n{last_result}\nAnswer the user now using this result."})
                 continue
             command = str(tool_args.get("command") or "").strip()
             if not command:

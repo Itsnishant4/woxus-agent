@@ -133,6 +133,8 @@ async def handle_tool_call(name: str, args: dict) -> dict:
             return _list_dir(args)
         elif name == "write_to_focused_input":
             return _write_to_focused_input(args)
+        elif name == "open_app":
+            return await _open_app(args)
         elif name == "memory_create":
             return await _memory_create(args)
         elif name == "memory_list":
@@ -366,6 +368,13 @@ def _list_dir(args: dict) -> dict:
 
 
 # --- Prompt Writer ---
+
+async def _open_app(args: dict) -> dict:
+    """Launch a desktop app by spoken name (macOS fuzzy resolution + verify)."""
+    from .open_app import open_app as launch
+
+    return await launch(str(args.get("app_name", args.get("app", "")) or ""), args.get("args"))
+
 
 def _write_to_focused_input(args: dict) -> dict:
     """Return a paste payload — the Electron side pastes it at the cursor."""

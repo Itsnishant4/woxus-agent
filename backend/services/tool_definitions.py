@@ -204,6 +204,27 @@ list_dir_declaration = types.FunctionDeclaration(
 )
 
 
+# --- Open-app tool (mini-agent internal: macOS fuzzy resolution + verify) ---
+
+open_app_declaration = types.FunctionDeclaration(
+    name="open_app",
+    description=(
+        "Open a desktop app by its spoken name on macOS (e.g. 'Calculator', "
+        "'chrome', 'vscode'). Resolves aliases and .app bundles, launches, "
+        "and verifies. Use INSTEAD of guessing `open -a` shell syntax."
+    ),
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "app_name": types.Schema(
+                type=types.Type.STRING,
+                description="Spoken app name (e.g. 'Calculator', 'Google Chrome')",
+            ),
+        },
+        required=["app_name"],
+    ),
+)
+
 # --- Memory tools ---
 
 memory_create_declaration = types.FunctionDeclaration(

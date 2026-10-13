@@ -115,7 +115,7 @@ export async function getLicenseStatus(): Promise<{
     }
   }
 
-  // Check cached trial accurately
+  // Trial: backend is source of truth so admin Reset propagates. Backend first, cache fallback offline.
   const cachedTrial = settingsStore.getCachedTrialStatus();
   console.log('[LicenseIpc] Checking local trial cache...', cachedTrial);
   if (cachedTrial?.active) {
@@ -132,8 +132,7 @@ export async function getLicenseStatus(): Promise<{
           trialTotal: cachedTrial.total_seconds,
         };
       }
-      console.log('[LicenseIpc] Local cache says trial has expired.');
-      return { status: 'unlicensed', trialTotal: cachedTrial.total_seconds };
+      console.log('[LicenseIpc] Local cache expired, checking backend for admin reset.');
     }
   }
 
@@ -178,6 +177,15 @@ export async function getTrialStatus(): Promise<{
     const res = await fetch(`${apiBase()}/trial/status?hardware_id=${hwid}`);
     const data = await res.json();
     console.log('[LicenseIpc] Polling response:', data);
+    if (data.active) {
+      settingsStore.setCachedTrialStatus({
+        active: true,
+        email: data.email || '',
+        remaining_seconds: data.remaining_seconds,
+        total_seconds: data.total_seconds,
+      });
+      settingsStore.setTrialStartedAt(Date.now() - (data.total_seconds - data.remaining_seconds) * 1000);
+    }
     return {
       active: data.active,
       remaining_seconds: data.remaining_seconds,
@@ -206,21 +214,29 @@ export async function startTrial(email: string): Promise<{
   remaining_seconds: number;
   total_seconds: number;
   email?: string;
+  error?: string;
 }> {
+  const clean = (email || '').trim();
+  if (!clean || !clean.includes('@') || !clean.split('@')[1]?.includes('.')) {
+    return { active: false, remaining_seconds: 0, total_seconds: 600, error: 'Valid email required to start trial' };
+  }
   const hwid = getHardwareId();
   try {
     const res = await fetch(`${apiBase()}/trial/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hardware_id: hwid, email }),
+      body: JSON.stringify({ hardware_id: hwid, email: clean }),
     });
     const data = await res.json();
+    if (!res.ok && !data.active) {
+      return { active: false, remaining_seconds: 0, total_seconds: 600, error: data.detail || data.error || 'Could not start trial' };
+    }
     if (data.active) {
-      settingsStore.setTrialEmail(data.email || email);
+      settingsStore.setTrialEmail(data.email || clean);
       settingsStore.setTrialStartedAt(Date.now());
       settingsStore.setCachedTrialStatus({
         active: true,
-        email: data.email || email,
+        email: data.email || clean,
         remaining_seconds: data.remaining_seconds,
         total_seconds: data.total_seconds,
       });

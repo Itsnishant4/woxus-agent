@@ -174,6 +174,7 @@ export default function App() {
           return;
         }
       } else if (result.status === 'trial') {
+        localStorage.removeItem('woxus_trial_expired');
         setAppStatus('trial');
         return;
       } else {
@@ -191,19 +192,29 @@ export default function App() {
   }, [checkLicense]);
 
   useEffect(() => {
-    if (appStatus !== 'trial') return;
+    if (appStatus === 'licensed' || appStatus === 'loading') return;
+    const pollMs = appStatus === 'trial' ? 5000 : 10000;
     const interval = setInterval(async () => {
       try {
         // @ts-ignore
         const data = await window.electronAPI?.getTrialStatus?.();
-        if (data && !data.active) {
-          localStorage.setItem('woxus_trial_expired', 'true');
-          setAppStatus('unlicensed');
+        if (!data) return;
+        if (!data.active) {
+          if (appStatus === 'trial') {
+            localStorage.setItem('woxus_trial_expired', 'true');
+            setAppStatus('unlicensed');
+          }
+        } else if (appStatus === 'unlicensed') {
+          // Admin Reset trial from panel — clear sticky expired flag.
+          localStorage.removeItem('woxus_trial_expired');
+          setAppStatus('trial');
+        } else {
+          localStorage.removeItem('woxus_trial_expired');
         }
       } catch {
         // ignore
       }
-    }, 5000);
+    }, pollMs);
     return () => clearInterval(interval);
   }, [appStatus]);
 

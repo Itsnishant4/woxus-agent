@@ -13,10 +13,17 @@ router = APIRouter()
 async def trial_start(req: TrialStartRequest):
     if not req.hardware_id:
         raise HTTPException(400, "hardware_id required")
-    if not req.email:
-        raise HTTPException(400, "email required")
+    email = (req.email or "").strip()
+    if not email:
+        raise HTTPException(400, "Email required to start trial")
+    # Basic format check (full check lives in trial_tracker._is_valid_email).
+    if "@" not in email or "." not in email.split("@")[-1] or " " in email:
+        raise HTTPException(400, "Valid email required to start trial")
 
-    status = trial_tracker.start_trial(req.hardware_id, req.device_info, req.email)
+    try:
+        status = trial_tracker.start_trial(req.hardware_id, req.device_info, email)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return TrialStatusResponse(
         active=status["active"],
         remaining_seconds=status["remaining_seconds"],

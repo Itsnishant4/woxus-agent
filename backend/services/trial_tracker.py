@@ -73,13 +73,69 @@ def _parse_dt(value: str | None) -> datetime | None:
     except (ValueError, TypeError):
         return None
 
+
+def _is_valid_email(email: str | None) -> bool:
+    """Compulsory email gate: non-empty + basic format. No external deps."""
+    if not email:
+        return False
+    s = email.strip()
+    if len(s) < 5 or len(s) > 254:
+        return False
+    if "@" not in s:
+        return False
+    local, _, domain = s.partition("@")
+    if not local or not domain or "." not in domain:
+        return False
+    if " " in s:
+        return False
+    return True
+
+
+def _apply_server_sync(existing: dict, api_res: dict | None, email: str | None = None) -> dict | None:
+    """Adopt server clock when admin reset/duration change detected.
+
+    Returns None when no usable server info. Mutates `existing` in place.
+    Caller must _save_trials() after.
+    """
+    if not api_res or not api_res.get("exists"):
+        return None
+    if not api_res.get("active"):
+        return {
+            "active": False,
+            "remaining_seconds": 0,
+            "total_seconds": api_res.get("total_seconds", existing.get("total_seconds", TRIAL_DURATION_SECONDS)),
+            "email": api_res.get("email", existing.get("email")),
+        }
+    srv_total = api_res.get("total_seconds") or existing.get("total_seconds", TRIAL_DURATION_SECONDS)
+    srv_started = _parse_dt(api_res.get("trial_started_at"))
+    loc_started = _parse_dt(existing.get("started_at"))
+    if srv_started and (loc_started is None or srv_started > loc_started):
+        # Admin reset the trial clock — adopt server start + duration.
+        existing["started_at"] = srv_started.isoformat()
+    existing["total_seconds"] = srv_total
+    if email and _is_valid_email(email):
+        existing["email"] = email.strip()
+    return None  # None = still active, caller computes remaining locally
+
 def get_configured_duration() -> int:
     """Current global trial duration in seconds (admin API, fallback default)."""
     return _get_trial_duration_from_api()
 
 def start_trial(hardware_id: str, device_info: str | None = None, email: str | None = None) -> dict:
     logger.info(f"[TrialTracker] start_trial called for hwid={hardware_id}")
+    # Email compulsory: new trial cannot start without valid email.
+    # Existing trial re-sync may pass stored email when caller omits it.
     trials = _load_trials()
+    if hardware_id in trials:
+        stored_email = (trials[hardware_id].get("email") or "").strip()
+        effective_email = email.strip() if email and email.strip() else stored_email
+        if not _is_valid_email(effective_email):
+            raise ValueError("Valid email required to start trial")
+        email = effective_email
+    elif not _is_valid_email(email):
+        raise ValueError("Valid email required to start trial")
+    else:
+        email = email.strip()  # type: ignore[union-attr]
     total_seconds = _get_trial_duration_from_api()
 
     # If the user already has a trial in trials.json, re-sync with the server
@@ -90,23 +146,10 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
         # Send the CURRENT global duration (not the stale local total) so the
         # server row heals to the admin setting and the device follows.
         api_res = _register_trial_with_api(hardware_id, email, device_info, total_seconds)
-        if api_res and api_res.get("exists"):
-            if not api_res.get("active"):
-                return {
-                    "active": False,
-                    "remaining_seconds": 0,
-                    "total_seconds": api_res.get("total_seconds", existing["total_seconds"]),
-                    "email": api_res.get("email", existing.get("email")),
-                }
-            srv_total = api_res.get("total_seconds") or existing["total_seconds"]
-            srv_started = _parse_dt(api_res.get("trial_started_at"))
-            loc_started = _parse_dt(existing["started_at"])
-            if srv_started and (loc_started is None or srv_started > loc_started):
-                # Admin reset the trial clock — adopt server start + duration.
-                existing["started_at"] = srv_started.isoformat()
-            existing["total_seconds"] = srv_total
-            if email:
-                existing["email"] = email
+        synced_inactive = _apply_server_sync(existing, api_res, email)
+        if synced_inactive is not None:
+            return synced_inactive
+        if api_res:
             _save_trials(trials)
         started = _parse_dt(existing["started_at"]) or datetime.utcnow()
         elapsed = (datetime.utcnow() - started).total_seconds()
@@ -145,7 +188,7 @@ def start_trial(hardware_id: str, device_info: str | None = None, email: str | N
     record = {
         "hardware_id": hardware_id,
         "device_info": device_info or "",
-        "email": email or "",
+        "email": email,
         "started_at": datetime.utcnow().isoformat(),
         "total_seconds": total_seconds,
     }
@@ -172,9 +215,23 @@ def get_trial_status(hardware_id: str) -> dict:
             "email": None,
         }
     rec = trials[hardware_id]
-    started = datetime.fromisoformat(rec["started_at"])
+    # Re-sync with server so admin Reset trial propagates without requiring
+    # a /start call. Uses stored email; offline → local calc unchanged.
+    try:
+        total_hint = _get_trial_duration_from_api()
+        api_res = _register_trial_with_api(
+            hardware_id, rec.get("email") or "", rec.get("device_info") or "", total_hint
+        )
+        synced_inactive = _apply_server_sync(rec, api_res, rec.get("email"))
+        if synced_inactive is not None:
+            return synced_inactive
+        if api_res:
+            _save_trials(trials)
+    except Exception as e:
+        logger.warning(f"[TrialTracker] status sync failed, using local: {e}")
+    started = _parse_dt(rec.get("started_at")) or datetime.utcnow()
     elapsed = (datetime.utcnow() - started).total_seconds()
-    remaining = max(0, rec["total_seconds"] - elapsed)
+    remaining = max(0, rec.get("total_seconds", TRIAL_DURATION_SECONDS) - elapsed)
 
     logger.info(f"[TrialTracker] Local trial check. Elapsed: {elapsed}s, Remaining: {remaining}s")
 

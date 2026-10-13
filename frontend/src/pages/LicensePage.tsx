@@ -22,6 +22,7 @@ export default function LicensePage({ onActivated }: Props) {
   const [trialDurationLabel, setTrialDurationLabel] = useState<string | null>(null);
   const [startingTrial, setStartingTrial] = useState(false);
   const [trialEmail, setTrialEmail] = useState("");
+  const [trialEmailError, setTrialEmailError] = useState("");
   const [trialExpired, setTrialExpired] = useState(false);
 
   const [feedbackRating, setFeedbackRating] = useState(0);
@@ -71,12 +72,18 @@ export default function LicensePage({ onActivated }: Props) {
       setTrialSec(result.trialRemaining || 0);
       setTrialTotal(result.trialTotal || 600);
       setTrialEmail(result.trialEmail || "");
+      localStorage.removeItem("woxus_trial_expired");
+      setTrialExpired(false);
       setState("trial");
       return;
     }
 
+    // Backend says unlicensed — but if admin just Reset, backend sync may
+    // still be converging. Only honour sticky expired flag when backend agrees.
     if (localStorage.getItem("woxus_trial_expired") === "true") {
       setTrialExpired(true);
+    } else {
+      setTrialExpired(false);
     }
     setState("unlicensed");
   }, []);
@@ -95,6 +102,7 @@ export default function LicensePage({ onActivated }: Props) {
   }, []);
 
   useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
     if (state === "trial") {
       intervalRef.current = setInterval(async () => {
         try {
@@ -103,15 +111,39 @@ export default function LicensePage({ onActivated }: Props) {
           if (!data) return;
           setTrialSec(data.remaining_seconds);
           if (!data.active) {
+            localStorage.setItem("woxus_trial_expired", "true");
             setState("unlicensed");
             setTrialExpired(true);
             toast("Your free trial has ended. Purchase a license to continue.", "info");
             if (intervalRef.current) clearInterval(intervalRef.current);
+          } else {
+            localStorage.removeItem("woxus_trial_expired");
+            setTrialExpired(false);
           }
         } catch {
           /* ignore */
         }
       }, 1000);
+    } else if (state === "unlicensed") {
+      // Detect admin Reset trial while sitting on expired screen.
+      intervalRef.current = setInterval(async () => {
+        try {
+          // @ts-ignore
+          const data = await window.electronAPI?.getTrialStatus?.();
+          if (data?.active) {
+            setTrialSec(data.remaining_seconds);
+            setTrialTotal(data.total_seconds);
+            setTrialEmail(data.email || "");
+            localStorage.removeItem("woxus_trial_expired");
+            setTrialExpired(false);
+            setState("trial");
+            toast("Trial reset — welcome back!", "info");
+            onActivated?.();
+          }
+        } catch {
+          /* ignore */
+        }
+      }, 5000);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -141,23 +173,32 @@ export default function LicensePage({ onActivated }: Props) {
   };
 
   const handleStartTrial = async () => {
+    const clean = trialEmail.trim();
+    if (!clean || !clean.includes("@") || !clean.split("@")[1]?.includes(".")) {
+      setTrialEmailError("Valid email required to start trial");
+      return;
+    }
+    setTrialEmailError("");
     setStartingTrial(true);
     try {
       // @ts-ignore
-      const data = await window.electronAPI?.startTrial?.(trialEmail);
+      const data = await window.electronAPI?.startTrial?.(clean);
       if (data?.active) {
         setTrialSec(data.remaining_seconds);
         setTrialTotal(data.total_seconds);
-        setTrialEmail(data.email || trialEmail);
+        setTrialEmail(data.email || clean);
+        setTrialExpired(false);
         setState("trial");
         localStorage.removeItem("woxus_trial_expired");
         onActivated?.();
       } else {
+        const reason = (data as any)?.error || "Could not start trial — you may have already used it on this device.";
+        setTrialEmailError(reason);
         localStorage.setItem("woxus_trial_expired", "true");
         setTrialExpired(true);
       }
     } catch {
-      /* ignore */
+      setTrialEmailError("Could not reach trial server");
     }
     setStartingTrial(false);
   };
@@ -415,9 +456,15 @@ export default function LicensePage({ onActivated }: Props) {
               type="email"
               placeholder="Your email (required)"
               value={trialEmail}
-              onChange={(e) => setTrialEmail(e.target.value)}
+              onChange={(e) => { setTrialEmail(e.target.value); setTrialEmailError(""); }}
               className={inputCls}
             />
+            {trialEmailError && (
+              <p className="text-xs text-destructive font-medium flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5" />
+                {trialEmailError}
+              </p>
+            )}
             <button
               onClick={handleStartTrial}
               disabled={startingTrial || !trialEmail.trim() || !trialEmail.includes("@")}

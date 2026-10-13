@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
     }
 
     let existing = await User.findOne({ hardwareId });
-    if (!existing && email) {
-      existing = await User.findOne({ email });
+    const cleanEmail = (email || "").trim();
+    if (!existing && cleanEmail) {
+      existing = await User.findOne({ email: cleanEmail });
     }
 
     if (existing) {
@@ -36,13 +37,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // New trial requires valid email — compulsory gate.
+    if (!cleanEmail || !cleanEmail.includes("@") || !cleanEmail.split("@")[1]?.includes(".")) {
+      return NextResponse.json({ error: "Valid email required to start trial" }, { status: 400 });
+    }
+
     // Upsert
     await User.findOneAndUpdate(
       { hardwareId },
       {
         $set: {
           hardwareId,
-          email: email || "",
+          email: cleanEmail,
           deviceInfo: deviceInfo || "",
           trialActive: true,
           trialStartedAt: new Date().toISOString(),
@@ -57,7 +63,7 @@ export async function POST(req: NextRequest) {
       exists: false,
       active: true,
       total_seconds: trialDurationSeconds || 600,
-      email: email || "",
+      email: cleanEmail,
     });
   } catch (error) {
     console.error("Trial public API error:", error);

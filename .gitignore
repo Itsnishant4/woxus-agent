@@ -34,13 +34,10 @@ frontend/resources/wacli/
 *~
 .DS_Store
 .Python
-.env
 .env.*.json
 .env.*.local
-.env.local
 .idea/
 .venv/
-.vscode/
 Thumbs.db
 __pycache__/
 backend/data/
@@ -60,3 +57,7 @@ yarn-error.log*
 actions-runner/
 actions-runner-arm64/
 .vercel
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat

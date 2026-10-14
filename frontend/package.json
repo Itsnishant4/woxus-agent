@@ -1,7 +1,7 @@
 {
   "name": "woxus",
   "private": true,
-  "version": "0.1.16",
+  "version": "0.1.17",
   "repository": {
     "type": "git",
     "url": "https://github.com/Itsnishant4/woxus-agent.git"
@@ -9,8 +9,8 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "node init && vite",
+    "build": "node init && tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx",
     "electron:dev": "node scripts/dev.mjs",

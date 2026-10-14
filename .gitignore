@@ -60,3 +60,6 @@ yarn-error.log*
 actions-runner/
 actions-runner-arm64/
 .vercel
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
